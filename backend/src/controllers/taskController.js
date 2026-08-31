@@ -1,4 +1,3 @@
-
 const db = require("../config/db");
 const nodemailer = require("nodemailer");
 
@@ -61,7 +60,10 @@ const sendTaskAssignmentEmail = async ({
     projectName,
 }) => {
     if (!memberEmail) {
-        console.log("No email address found for assigned member.");
+        console.log(
+            "No email address found for assigned member."
+        );
+
         return false;
     }
 
@@ -100,6 +102,7 @@ const sendTaskAssignmentEmail = async ({
                             padding:28px;
                             color:white;
                         ">
+
                             <h1 style="
                                 margin:0;
                                 font-size:24px;
@@ -113,6 +116,7 @@ const sendTaskAssignmentEmail = async ({
                             ">
                                 CollabFlow AI
                             </p>
+
                         </div>
 
                         <div style="padding:30px;">
@@ -241,22 +245,28 @@ const sendTaskAssignmentEmail = async ({
 // TASK COUNTS
 // ============================================================
 
-const getTaskCounts = async (userId, projectId = null) => {
+const getTaskCounts = async (
+    userId,
+    projectId = null
+) => {
 
     let query = `
         SELECT
             COUNT(*) AS total,
 
             COUNT(*) FILTER (
-                WHERE status = 'Pending'
+                WHERE LOWER(status) = 'pending'
             ) AS pending,
 
             COUNT(*) FILTER (
-                WHERE status = 'In Progress'
+                WHERE LOWER(status) IN (
+                    'in progress',
+                    'in-progress'
+                )
             ) AS in_progress,
 
             COUNT(*) FILTER (
-                WHERE status = 'Completed'
+                WHERE LOWER(status) = 'completed'
             ) AS completed
 
         FROM tasks
@@ -267,7 +277,6 @@ const getTaskCounts = async (userId, projectId = null) => {
     const params = [userId];
 
     if (projectId) {
-
         query += `
             AND project_id = $2::integer
         `;
@@ -853,15 +862,18 @@ const getTasksByProject = async (req, res) => {
                     COUNT(*) AS total,
 
                     COUNT(*) FILTER (
-                        WHERE status = 'Pending'
+                        WHERE LOWER(status) = 'pending'
                     ) AS pending,
 
                     COUNT(*) FILTER (
-                        WHERE status = 'In Progress'
+                        WHERE LOWER(status) IN (
+                            'in progress',
+                            'in-progress'
+                        )
                     ) AS in_progress,
 
                     COUNT(*) FILTER (
-                        WHERE status = 'Completed'
+                        WHERE LOWER(status) = 'completed'
                     ) AS completed
 
                 FROM tasks
@@ -911,6 +923,17 @@ const getTasksByProject = async (req, res) => {
 
         // ====================================================
         // GET PROJECT TASKS
+        //
+        // assigned_to remains the USER ID in database.
+        //
+        // But the API additionally returns:
+        //
+        // assigned_user_id
+        // assigned_to_name
+        // assigned_to_email
+        //
+        // This allows the AI to identify a member by
+        // either NAME or EMAIL.
         // ====================================================
 
         const result =
@@ -919,10 +942,6 @@ const getTasksByProject = async (req, res) => {
                 SELECT
 
                     t.*,
-
-                    -- IMPORTANT:
-                    -- Return assigned user's ID
-                    -- name and email
 
                     u.id AS assigned_user_id,
 
@@ -1366,7 +1385,7 @@ const updateTask = async (req, res) => {
             result.rows[0];
 
         // ====================================================
-        // CHECK IF ASSIGNMENT CHANGED
+        // CHECK ASSIGNMENT CHANGE
         // ====================================================
 
         const assignmentChanged =
@@ -1455,7 +1474,7 @@ const updateTask = async (req, res) => {
         }
 
         // ====================================================
-        // RETURN UPDATED TASK WITH MEMBER NAME
+        // RETURN UPDATED TASK WITH MEMBER DETAILS
         // ====================================================
 
         const finalResult =
@@ -1681,4 +1700,3 @@ module.exports = {
     deleteAllProjectTasks,
 
 };
-

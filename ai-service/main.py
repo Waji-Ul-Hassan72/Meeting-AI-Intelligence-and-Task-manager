@@ -1,8 +1,19 @@
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Header
+)
+from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
+
 import tempfile
 import os
+
 from services.meeting_pipeline import process_meeting
+from services.assistant_service import ask_ai_assistant
 
 
 # ============================================================
@@ -13,6 +24,36 @@ app = FastAPI(
     title="CollabFlow AI Service",
     version="1.0.0"
 )
+
+
+app = FastAPI(
+    title="CollabFlow AI Service",
+    version="1.0.0"
+)
+
+
+# ============================================================
+# CORS
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# ASSISTANT REQUEST MODEL
+# ============================================================
+
+class AssistantRequest(BaseModel):
+
+    project_id: str
+    question: str
 
 
 # ============================================================
@@ -26,6 +67,158 @@ def root():
         "success": True,
         "message": "AI service is running"
     }
+
+
+# ============================================================
+# AI PROJECT ASSISTANT
+# ============================================================
+
+@app.post("/assistant")
+async def project_assistant(
+    request: AssistantRequest,
+    authorization: str | None = Header(default=None)
+):
+
+    try:
+
+        print("\n==========================================")
+        print("AI ASSISTANT REQUEST")
+        print("==========================================")
+
+        print(
+            "Project ID:",
+            request.project_id
+        )
+
+        print(
+            "Question:",
+            request.question
+        )
+
+        # ====================================================
+        # VALIDATE PROJECT ID
+        # ====================================================
+
+        if not request.project_id.strip():
+
+            raise HTTPException(
+                status_code=400,
+                detail="Project ID is required."
+            )
+
+        # ====================================================
+        # VALIDATE QUESTION
+        # ====================================================
+
+        if not request.question.strip():
+
+            raise HTTPException(
+                status_code=400,
+                detail="Question is required."
+            )
+
+        # ====================================================
+        # CHECK AUTHORIZATION
+        # ====================================================
+
+        if not authorization:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Authorization token is required."
+            )
+
+        if not authorization.startswith("Bearer "):
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authorization header."
+            )
+
+        # ====================================================
+        # EXTRACT JWT TOKEN
+        # ====================================================
+
+        token = authorization.replace(
+            "Bearer ",
+            "",
+            1
+        ).strip()
+
+        if not token:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication token."
+            )
+
+        # ====================================================
+        # RUN AI ASSISTANT
+        # ====================================================
+
+        result = ask_ai_assistant(
+            token=token,
+            project_id=request.project_id,
+            question=request.question
+        )
+
+        # ====================================================
+        # PRINT RESPONSE
+        # ====================================================
+
+        print("\n==========================================")
+        print("AI ASSISTANT RESPONSE")
+        print("==========================================")
+
+        print(
+            result.get(
+                "answer",
+                ""
+            )
+        )
+
+        print("==========================================")
+
+        # ====================================================
+        # RETURN RESPONSE
+        # ====================================================
+
+        return result
+
+    except HTTPException:
+
+        raise
+
+    except ValueError as error:
+
+        print(
+            "Assistant validation error:",
+            str(error)
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except Exception as error:
+
+        print("\n==========================================")
+        print("❌ AI ASSISTANT ERROR")
+        print("==========================================")
+
+        print(
+            type(error).__name__,
+            ":",
+            str(error)
+        )
+
+        print("==========================================")
+
+        raise HTTPException(
+            status_code=500,
+            detail="AI assistant failed."
+        )
 
 
 # ============================================================
@@ -45,8 +238,15 @@ async def process_meeting_audio(
         print("MEETING AUDIO RECEIVED")
         print("==========================================")
 
-        print("Filename:", file.filename)
-        print("Content type:", file.content_type)
+        print(
+            "Filename:",
+            file.filename
+        )
+
+        print(
+            "Content type:",
+            file.content_type
+        )
 
         # ====================================================
         # VALIDATE FILE
@@ -68,6 +268,7 @@ async def process_meeting_audio(
         )[1]
 
         if not extension:
+
             extension = ".webm"
 
         # ====================================================
@@ -97,7 +298,7 @@ async def process_meeting_audio(
         )
 
         # ====================================================
-        # RUN COMPLETE PIPELINE
+        # RUN COMPLETE MEETING PIPELINE
         # ====================================================
 
         print("\n==========================================")
@@ -129,6 +330,7 @@ async def process_meeting_audio(
                 "Meeting processed successfully.",
 
             "segments": result
+
         }
 
     except HTTPException:
@@ -167,7 +369,9 @@ async def process_meeting_audio(
 
             try:
 
-                os.remove(temp_path)
+                os.remove(
+                    temp_path
+                )
 
                 print(
                     "🗑️ Temporary meeting audio deleted."
@@ -179,4 +383,3 @@ async def process_meeting_audio(
                     "Could not delete temporary meeting file:",
                     str(error)
                 )
-

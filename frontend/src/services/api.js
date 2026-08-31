@@ -219,6 +219,58 @@ export const createMeeting = (meetingData) => {
 };
 
 // ============================================================
+// AI ASSISTANT
+// ============================================================
+
+export const askAIAssistant = async (
+  projectId,
+  question
+) => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    throw new Error("Authentication token is missing.");
+  }
+
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  if (!question?.trim()) {
+    throw new Error("Question is required.");
+  }
+
+  const response = await fetch(
+    "http://localhost:8000/assistant",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+
+      body: JSON.stringify({
+        project_id: projectId,
+        question: question.trim(),
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.detail ||
+        data?.message ||
+        "AI assistant request failed."
+    );
+  }
+
+  return data;
+};
+
+// ============================================================
 // DEFAULT EXPORT
 // ============================================================
 

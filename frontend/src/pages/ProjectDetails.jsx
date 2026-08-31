@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
+import AIAssistant from "../components/AIAssistant";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -858,6 +859,7 @@ function ProjectDetails() {
               "meetings",
               "transcription",
               "insights",
+              "assistant",
             ].map((tab) => (
 
               <button
@@ -874,6 +876,8 @@ function ProjectDetails() {
 
                 {tab === "insights"
                   ? "AI Insights"
+                  : tab === "assistant"
+                  ? "AI Assistant"
                   : tab}
 
               </button>
@@ -1326,6 +1330,13 @@ function ProjectDetails() {
 
             )}
 
+          </div>
+        )}
+
+
+        {activeTab === "assistant" && (
+          <div>
+            <AIAssistant projectId={id} />
           </div>
         )}
 

@@ -18,7 +18,7 @@ import MemberDashboard from "./pages/MemberDashboard";
 // Project Pages
 // =======================
 import Project from "./pages/Project";
-import Projects from "./pages/Projects";
+//import Projects from "./pages/Projects";
 
 
 import ProjectDetails from "./pages/ProjectDetails";
@@ -187,14 +187,14 @@ function App() {
           }
         />
 
-        <Route
+        {/* <Route
           path="/projects"
           element={
             <ProtectedRoute>
               <Projects />
             </ProtectedRoute>
           }
-        />
+        /> */}
 
         {/* Project Details */}
         <Route
