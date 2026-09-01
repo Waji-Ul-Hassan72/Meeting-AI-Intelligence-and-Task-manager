@@ -52,31 +52,20 @@ const getPagination = (req) => {
 // ============================================================
 
 const getAttachmentValue = (req) => {
-    /*
-        Multer puts the uploaded file inside req.file.
 
-        We store the file path/URL inside the existing
-        tasks.attachment column.
-
-        If no new file is uploaded, return undefined so
-        existing attachment is not changed during update.
-    */
+    // ========================================================
+    // MULTER UPLOADED FILE
+    // ========================================================
 
     if (req.file) {
-        return (
-            req.file.path ||
-            req.file.location ||
-            req.file.filename ||
-            null
-        );
+
+        // Store a URL path, NOT the Windows filesystem path
+        return `/uploads/tasks/${req.file.filename}`;
     }
 
-    /*
-        Allow JSON/body based attachment value as well.
-
-        This is useful if your frontend already sends
-        an attachment URL/path.
-    */
+    // ========================================================
+    // ATTACHMENT SENT FROM REQUEST BODY
+    // ========================================================
 
     if (
         req.body &&
@@ -87,6 +76,10 @@ const getAttachmentValue = (req) => {
     ) {
         return req.body.attachment || null;
     }
+
+    // ========================================================
+    // NO ATTACHMENT
+    // ========================================================
 
     return undefined;
 };

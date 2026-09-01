@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createTask } from "../services/api";
+import { Paperclip, X, FileText } from "lucide-react";
 
 function Task() {
   const navigate = useNavigate();
   const { projectId } = useParams();
+
+  const fileInputRef = useRef(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -14,6 +18,12 @@ function Task() {
 
   const [members, setMembers] = useState([]);
   const [assignedTo, setAssignedTo] = useState("");
+
+  // ============================================================
+  // ATTACHMENT
+  // ============================================================
+
+  const [attachment, setAttachment] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -63,9 +73,6 @@ function Task() {
           );
         }
 
-        // Supports either:
-        // { members: [...] }
-        // OR directly [...]
         const projectMembers = Array.isArray(data)
           ? data
           : data.members || [];
@@ -88,15 +95,61 @@ function Task() {
   }, [projectId, navigate]);
 
   // ============================================================
+  // HANDLE ATTACHMENT SELECTION
+  // ============================================================
+
+  const handleAttachmentChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    // Maximum 10 MB
+    const maxSize = 10 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setErrorMessage(
+        "File is too large. Maximum attachment size is 10 MB."
+      );
+
+      e.target.value = "";
+      setAttachment(null);
+
+      return;
+    }
+
+    setErrorMessage("");
+    setAttachment(file);
+  };
+
+  // ============================================================
+  // REMOVE ATTACHMENT
+  // ============================================================
+
+  const handleRemoveAttachment = () => {
+    setAttachment(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // ============================================================
   // SAVE TASK
   // ============================================================
 
   const handleSaveTask = async (e) => {
     e.preventDefault();
+
     setErrorMessage("");
 
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
+
+    // ============================================================
+    // VALIDATION
+    // ============================================================
 
     if (!trimmedTitle) {
       setErrorMessage("Task title is required.");
@@ -109,7 +162,9 @@ function Task() {
     }
 
     if (!assignedTo) {
-      setErrorMessage("Please select a team member to assign this task.");
+      setErrorMessage(
+        "Please select a team member to assign this task."
+      );
       return;
     }
 
@@ -133,27 +188,50 @@ function Task() {
           : parseInt(projectId, 10)
         : null;
 
-      const taskPayload = {
-        title: trimmedTitle,
-        description: trimmedDesc,
-        priority,
-        status,
-        due_date: dueDate || null,
-        attachment: null,
-        project_id: formattedProjectId,
+      // ============================================================
+      // FORM DATA
+      // ============================================================
 
-        // Assigned team member
-        assigned_to: parseInt(assignedTo, 10),
-      };
+      const formData = new FormData();
 
-      await createTask(taskPayload);
+      formData.append("title", trimmedTitle);
+      formData.append("description", trimmedDesc);
+      formData.append("priority", priority);
+      formData.append("status", status);
+      formData.append("due_date", dueDate || "");
+      formData.append(
+        "project_id",
+        formattedProjectId !== null
+          ? String(formattedProjectId)
+          : ""
+      );
+
+      formData.append(
+        "assigned_to",
+        String(parseInt(assignedTo, 10))
+      );
+
+      // ============================================================
+      // OPTIONAL ATTACHMENT
+      // ============================================================
+
+      if (attachment) {
+        formData.append("attachment", attachment);
+      }
+
+      // ============================================================
+      // CREATE TASK
+      // ============================================================
+
+      await createTask(formData);
 
       navigate(-1);
     } catch (error) {
       console.error("Error creating task:", error);
 
       setErrorMessage(
-        error.message || "Server Error: Unable to create task"
+        error.message ||
+          "Server Error: Unable to create task"
       );
     } finally {
       setLoading(false);
@@ -167,6 +245,26 @@ function Task() {
   const handleCancel = () => {
     navigate(-1);
   };
+
+  // ============================================================
+  // FORMAT FILE SIZE
+  // ============================================================
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-sans overflow-y-auto">
@@ -215,7 +313,10 @@ function Task() {
             FORM
         ====================================================== */}
 
-        <form onSubmit={handleSaveTask} className="space-y-3.5">
+        <form
+          onSubmit={handleSaveTask}
+          className="space-y-3.5"
+        >
 
           {/* ====================================================
               TASK TITLE
@@ -270,7 +371,9 @@ function Task() {
               <select
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
                 value={priority}
-                onChange={(e) => setPriority(e.target.value)}
+                onChange={(e) =>
+                  setPriority(e.target.value)
+                }
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -286,11 +389,17 @@ function Task() {
               <select
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={(e) =>
+                  setStatus(e.target.value)
+                }
               >
                 <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
+                <option value="In Progress">
+                  In Progress
+                </option>
+                <option value="Completed">
+                  Completed
+                </option>
               </select>
             </div>
 
@@ -308,7 +417,9 @@ function Task() {
             <select
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
               value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
+              onChange={(e) =>
+                setAssignedTo(e.target.value)
+              }
               disabled={loadingMembers}
               required
             >
@@ -327,6 +438,7 @@ function Task() {
                     member.full_name ||
                     member.username ||
                     member.email}
+
                   {member.email &&
                   (member.name ||
                     member.full_name ||
@@ -337,11 +449,12 @@ function Task() {
               ))}
             </select>
 
-            {!loadingMembers && members.length === 0 && (
-              <p className="mt-1.5 text-[10px] text-amber-600">
-                No team members found for this project.
-              </p>
-            )}
+            {!loadingMembers &&
+              members.length === 0 && (
+                <p className="mt-1.5 text-[10px] text-amber-600">
+                  No team members found for this project.
+                </p>
+              )}
           </div>
 
           {/* ====================================================
@@ -357,8 +470,87 @@ function Task() {
               type="date"
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none cursor-pointer transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              onChange={(e) =>
+                setDueDate(e.target.value)
+              }
             />
+          </div>
+
+          {/* ====================================================
+              ATTACHMENT
+          ==================================================== */}
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
+              Attachment
+            </label>
+
+            <div className="flex items-center gap-2">
+
+              {/* Hidden File Input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                onChange={handleAttachmentChange}
+              />
+
+              {/* Paperclip Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  fileInputRef.current?.click()
+                }
+                disabled={loading}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-all cursor-pointer disabled:opacity-50"
+                title="Attach a file"
+                aria-label="Attach a file"
+              >
+                <Paperclip size={18} strokeWidth={2} />
+              </button>
+
+              {/* Selected File */}
+              {attachment ? (
+                <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+
+                  <FileText
+                    size={16}
+                    className="text-teal-600 flex-shrink-0"
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-700 truncate">
+                      {attachment.name}
+                    </p>
+
+                    <p className="text-[10px] text-slate-400">
+                      {formatFileSize(attachment.size)}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveAttachment}
+                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-500 hover:text-red-600 transition-colors cursor-pointer flex-shrink-0"
+                    title="Remove attachment"
+                    aria-label="Remove attachment"
+                  >
+                    <X size={14} />
+                  </button>
+
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  Optional — attach a file or image
+                </p>
+              )}
+
+            </div>
+
+            <p className="mt-1.5 text-[10px] text-slate-400">
+              Maximum file size: 10 MB
+            </p>
           </div>
 
           {/* ====================================================
@@ -378,10 +570,16 @@ function Task() {
 
             <button
               type="submit"
-              disabled={loading || loadingMembers || members.length === 0}
+              disabled={
+                loading ||
+                loadingMembers ||
+                members.length === 0
+              }
               className="w-full sm:flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {loading ? "Saving Task..." : "Save Task"}
+              {loading
+                ? "Saving Task..."
+                : "Save Task"}
             </button>
 
           </div>
@@ -393,3 +591,4 @@ function Task() {
 }
 
 export default Task;
+

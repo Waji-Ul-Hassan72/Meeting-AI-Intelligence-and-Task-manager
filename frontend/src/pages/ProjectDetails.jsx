@@ -14,6 +14,7 @@ import {
   CalendarDays,
   X,
   Save,
+  Paperclip,
 } from "lucide-react";
 
 const API_URL =
@@ -256,6 +257,77 @@ function ProjectDetails() {
       fetchTasks();
     }
   }, [id]);
+
+  // =========================================================
+  // ATTACHMENT URL
+  // =========================================================
+  const getAttachmentUrl = (task) => {
+    if (!task) return null;
+
+    const attachment =
+      task.attachment ||
+      task.attachment_url ||
+      task.attachmentUrl ||
+      task.file_url ||
+      task.fileUrl ||
+      task.file_path ||
+      task.filePath;
+
+    if (!attachment) {
+      return null;
+    }
+
+    // If backend returns an attachment object
+    if (typeof attachment === "object") {
+      const objectUrl =
+        attachment.url ||
+        attachment.file_url ||
+        attachment.fileUrl ||
+        attachment.path ||
+        attachment.file_path;
+
+      if (!objectUrl) {
+        return null;
+      }
+
+      if (
+        objectUrl.startsWith("http://") ||
+        objectUrl.startsWith("https://")
+      ) {
+        return objectUrl;
+      }
+
+      return `${API_URL}/${String(objectUrl).replace(/^\/+/, "")}`;
+    }
+
+    // If backend already returns a complete URL
+    if (
+      String(attachment).startsWith("http://") ||
+      String(attachment).startsWith("https://")
+    ) {
+      return attachment;
+    }
+
+    // If backend returns a relative path
+    return `${API_URL}/${String(attachment).replace(/^\/+/, "")}`;
+  };
+
+  // =========================================================
+  // OPEN ATTACHMENT
+  // =========================================================
+  const handleViewAttachment = (task) => {
+    const attachmentUrl = getAttachmentUrl(task);
+
+    if (!attachmentUrl) {
+      return;
+    }
+
+    window.open(
+      attachmentUrl,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
 
   // =========================================================
   // NORMALIZE STATUS
@@ -1088,10 +1160,37 @@ function ProjectDetails() {
                               }
                             >
 
-                              <p className="text-sm font-semibold text-slate-800">
-                                {task.name ||
-                                  task.title}
-                              </p>
+                              <div className="flex items-center gap-2">
+
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {task.name ||
+                                    task.title}
+                                </p>
+
+                                {/* =================================================
+                                    ATTACHMENT ICON
+                                ================================================= */}
+
+                                {getAttachmentUrl(
+                                  task
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleViewAttachment(
+                                        task
+                                      )
+                                    }
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 flex items-center justify-center transition-colors shrink-0"
+                                    title="View attachment"
+                                  >
+                                    <Paperclip
+                                      size={14}
+                                    />
+                                  </button>
+                                )}
+
+                              </div>
 
                               {task.description && (
                                 <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
@@ -1255,12 +1354,39 @@ function ProjectDetails() {
 
                                 <div className="flex items-start justify-between gap-3">
 
-                                  <div>
+                                  <div className="min-w-0">
 
-                                    <p className="text-sm font-semibold text-slate-800">
-                                      {task.name ||
-                                        task.title}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {task.name ||
+                                          task.title}
+                                      </p>
+
+                                      {/* =================================================
+                                          ATTACHMENT ICON - BOARD VIEW
+                                      ================================================= */}
+
+                                      {getAttachmentUrl(
+                                        task
+                                      ) && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleViewAttachment(
+                                              task
+                                            )
+                                          }
+                                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center transition-colors shrink-0"
+                                          title="View attachment"
+                                        >
+                                          <Paperclip
+                                            size={13}
+                                          />
+                                        </button>
+                                      )}
+
+                                    </div>
 
                                     {task.description && (
                                       <p className="text-xs text-slate-400 mt-1 line-clamp-2">
@@ -1332,7 +1458,6 @@ function ProjectDetails() {
 
           </div>
         )}
-
 
         {activeTab === "assistant" && (
           <div>
