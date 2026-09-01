@@ -9,6 +9,7 @@ require("dotenv").config();
 // ============================================================
 
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const passport = require("passport");
 const helmet = require("helmet");
@@ -146,6 +147,13 @@ app.use("/api/teams", teamRoutes);
 app.use(
     "/api/project-invitations",
     projectInvitationRoutes
+);
+
+app.use(
+  "/uploads",
+  express.static(
+    path.join(__dirname, "uploads")
+  )
 );
 
 // ============================================================

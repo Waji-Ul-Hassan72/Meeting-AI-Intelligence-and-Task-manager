@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -13,32 +14,100 @@ const {
 
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Apply authentication middleware globally to all task endpoints
+const uploadTaskAttachment = require(
+    "../middleware/upload"
+);
+
+
+// ============================================================
+// AUTHENTICATION
+// ============================================================
+
 router.use(authMiddleware);
 
-// ===============================
-// Task Endpoints
-// ===============================
 
-// Create Task (Single or Recurring Bulk Creation)
-router.post("/", createTask);
+// ============================================================
+// CREATE TASK
+// ============================================================
 
-// Get All Tasks for Logged-In User (Paginated & Sorted)
-router.get("/", getTasks);
+// If no attachment is selected, the task is still created.
 
-// Get Tasks for a Specific Project (Paginated)
-router.get("/project/:projectId", getTasksByProject);
+router.post(
+    "/",
+    uploadTaskAttachment.single("attachment"),
+    createTask
+);
 
-// Delete All Tasks in a Specific Project
-router.delete("/project/:projectId/all", deleteAllProjectTasks);
 
-// Get Single Task Details
-router.get("/:id", getTaskById);
+// ============================================================
+// GET ALL TASKS
+// ============================================================
 
-// Update Existing Task
-router.put("/:id", updateTask);
+router.get(
+    "/",
+    getTasks
+);
 
-// Delete Single Task
-router.delete("/:id", deleteTask);
+
+// ============================================================
+// GET PROJECT TASKS
+// ============================================================
+
+router.get(
+    "/project/:projectId",
+    getTasksByProject
+);
+
+
+// ============================================================
+// DELETE ALL PROJECT TASKS
+// ============================================================
+
+router.delete(
+    "/project/:projectId/all",
+    deleteAllProjectTasks
+);
+
+
+// ============================================================
+// GET SINGLE TASK
+// ============================================================
+
+router.get(
+    "/:id",
+    getTaskById
+);
+
+// ============================================================
+// UPDATE TASK
+// ============================================================
+// An attachment can optionally be uploaded while updating
+// the task.
+
+
+
+router.put(
+    "/:id",
+    uploadTaskAttachment.single("attachment"),
+    updateTask
+);
+
+
+// ============================================================
+// DELETE SINGLE TASK
+// ============================================================
+
+// Delete one task.
+
+router.delete(
+    "/:id",
+    deleteTask
+);
+
+
+// ============================================================
+// EXPORT ROUTER
+// ============================================================
 
 module.exports = router;
+

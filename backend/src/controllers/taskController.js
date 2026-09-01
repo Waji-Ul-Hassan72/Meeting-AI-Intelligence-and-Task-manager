@@ -48,6 +48,50 @@ const getPagination = (req) => {
 };
 
 // ============================================================
+// ATTACHMENT HELPER
+// ============================================================
+
+const getAttachmentValue = (req) => {
+    /*
+        Multer puts the uploaded file inside req.file.
+
+        We store the file path/URL inside the existing
+        tasks.attachment column.
+
+        If no new file is uploaded, return undefined so
+        existing attachment is not changed during update.
+    */
+
+    if (req.file) {
+        return (
+            req.file.path ||
+            req.file.location ||
+            req.file.filename ||
+            null
+        );
+    }
+
+    /*
+        Allow JSON/body based attachment value as well.
+
+        This is useful if your frontend already sends
+        an attachment URL/path.
+    */
+
+    if (
+        req.body &&
+        Object.prototype.hasOwnProperty.call(
+            req.body,
+            "attachment"
+        )
+    ) {
+        return req.body.attachment || null;
+    }
+
+    return undefined;
+};
+
+// ============================================================
 // SEND TASK ASSIGNMENT EMAIL
 // ============================================================
 
@@ -318,7 +362,6 @@ const createTask = async (req, res) => {
             priority,
             status,
             due_date,
-            attachment,
             project_id,
             assigned_to,
             is_recurring,
@@ -385,6 +428,12 @@ const createTask = async (req, res) => {
 
         const taskStatus =
             status || "Pending";
+
+        // ====================================================
+        // ATTACHMENT
+        // ====================================================
+
+        const attachment = getAttachmentValue(req);
 
         // ====================================================
         // ASSIGNED MEMBER
@@ -626,6 +675,7 @@ const createTask = async (req, res) => {
             ...finalTaskResult.rows[0],
 
             emailSent,
+
         });
 
     } catch (error) {
@@ -923,17 +973,6 @@ const getTasksByProject = async (req, res) => {
 
         // ====================================================
         // GET PROJECT TASKS
-        //
-        // assigned_to remains the USER ID in database.
-        //
-        // But the API additionally returns:
-        //
-        // assigned_user_id
-        // assigned_to_name
-        // assigned_to_email
-        //
-        // This allows the AI to identify a member by
-        // either NAME or EMAIL.
         // ====================================================
 
         const result =
@@ -1064,6 +1103,18 @@ const getTaskById = async (req, res) => {
             });
         }
 
+        /*
+            The response includes:
+
+            attachment
+
+            because t.* is returned.
+
+            Therefore the frontend can display
+            the uploaded image/file when opening
+            the task.
+        */
+
         return res.status(200).json(
             result.rows[0]
         );
@@ -1180,6 +1231,29 @@ const updateTask = async (req, res) => {
 
         const existingTask =
             existingTaskResult.rows[0];
+
+        // ====================================================
+        // HANDLE NEW ATTACHMENT
+        // ====================================================
+
+        const uploadedAttachment =
+            getAttachmentValue(req);
+
+        /*
+            If a new file was uploaded, replace
+            the old attachment.
+
+            If attachment was explicitly sent as
+            null/empty, remove the attachment.
+
+            If neither was sent, keep the
+            existing attachment.
+        */
+
+        if (uploadedAttachment !== undefined) {
+            body.attachment =
+                uploadedAttachment;
+        }
 
         // ====================================================
         // FINAL PROJECT
@@ -1700,3 +1774,4 @@ module.exports = {
     deleteAllProjectTasks,
 
 };
+
