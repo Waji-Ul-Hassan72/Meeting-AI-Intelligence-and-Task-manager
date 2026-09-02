@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import AIAssistant from "../components/AIAssistant";
+import Transcription from "../pages/Transcription";
 
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -936,11 +937,8 @@ function ProjectDetails() {
       return;
     }
 
-    if (tab === "transcription") {
-      navigate(`/projects/${id}/transcription`);
-      return;
-    }
-
+    // Transcription is rendered inside this ProjectDetails page.
+    // It should NOT navigate to a separate page.
     setActiveTab(tab);
   };
 
@@ -1019,7 +1017,7 @@ function ProjectDetails() {
 
               <button
                 onClick={() =>
-                  navigate("/manager-dashboard", { replace: true })
+                  navigate("/dashboard", { replace: true })
                 }
                 className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-500 transition-colors"
                 title="Back to Dashboard"
@@ -1104,7 +1102,6 @@ function ProjectDetails() {
               "tasks",
               "meetings",
               "transcription",
-              "insights",
               ...(isManager ? ["assistant"] : []),
             ].map((tab) => (
 
@@ -1120,9 +1117,7 @@ function ProjectDetails() {
                 }`}
               >
 
-                {tab === "insights"
-                  ? "AI Insights"
-                  : tab === "assistant"
+                {tab === "assistant"
                   ? "AI Assistant"
                   : tab}
 
@@ -1675,6 +1670,14 @@ function ProjectDetails() {
         {/* =====================================================
             AI ASSISTANT
         ===================================================== */}
+
+        {activeTab === "transcription" && (
+
+          <div className="w-full">
+            <Transcription embedded projectId={id} />
+          </div>
+
+        )}
 
         {activeTab === "assistant" && isManager && (
 
