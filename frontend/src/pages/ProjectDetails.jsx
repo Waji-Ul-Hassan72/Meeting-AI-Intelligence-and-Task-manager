@@ -158,6 +158,18 @@ function ProjectDetails() {
     currentUserRole === "project manager" ||
     currentUserRole === "manager";
 
+  // =========================================================
+  // ROLE-BASED DASHBOARD NAVIGATION
+  // =========================================================
+  // Managers return to the Manager Dashboard.
+  // Developers/Members return to the Member Dashboard.
+  const handleBackToDashboard = () => {
+    navigate(
+      isManager ? "/manager-dashboard" : "/member-dashboard",
+      { replace: true }
+    );
+  };
+
   // Helper to check if the current logged-in user created the task
   const isTaskCreator = (task) => {
     if (!currentUser) return false;
@@ -982,9 +994,7 @@ function ProjectDetails() {
           </p>
 
           <button
-            onClick={() =>
-              navigate(-1)
-            }
+            onClick={handleBackToDashboard}
             className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold"
           >
             Go Back
@@ -1016,9 +1026,7 @@ function ProjectDetails() {
             <div className="flex items-center gap-4">
 
               <button
-                onClick={() =>
-                  navigate("/dashboard", { replace: true })
-                }
+                onClick={handleBackToDashboard}
                 className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-500 transition-colors"
                 title="Back to Dashboard"
               >
