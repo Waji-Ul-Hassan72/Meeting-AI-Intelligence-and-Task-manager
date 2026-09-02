@@ -1,14 +1,19 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://localhost:3000";
+import {
+  getProjects,
+  createProject,
+  updateProject,
+  deleteProject,
+} from "../services/api";
 
 function ManagerDashboard() {
   const navigate = useNavigate();
+
+  // ============================================================
+  // STATE
+  // ============================================================
 
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -30,20 +35,20 @@ function ManagerDashboard() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [updatingProject, setUpdatingProject] = useState(false);
   const [deletingProjectId, setDeletingProjectId] = useState(null);
-   
-   // ============================================================
-// AUTO-HIDE SUCCESS MESSAGE
-// ============================================================
 
-useEffect(() => {
-  if (!successMessage) return;
+  // ============================================================
+  // AUTO-HIDE SUCCESS MESSAGE
+  // ============================================================
 
-  const timer = setTimeout(() => {
-    setSuccessMessage("");
-  }, 3000);
+  useEffect(() => {
+    if (!successMessage) return;
 
-  return () => clearTimeout(timer);
-}, [successMessage]);
+    const timer = setTimeout(() => {
+      setSuccessMessage("");
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   // ============================================================
   // GET CURRENT USER
@@ -51,14 +56,16 @@ useEffect(() => {
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
 
-    if (!storedUser) {
+    if (!storedUser || !token) {
       navigate("/login");
       return;
     }
 
     try {
       const parsedUser = JSON.parse(storedUser);
+
       setUser(parsedUser);
     } catch (error) {
       console.error("Invalid stored user:", error);
@@ -71,10 +78,93 @@ useEffect(() => {
   }, [navigate]);
 
   // ============================================================
+  // NORMALIZE PROJECT RESPONSE
+  // ============================================================
+  /*
+   * Backend may return:
+   *
+   * 1. [...]
+   *
+   * 2. { projects: [...] }
+   *
+   * 3. { data: [...] }
+   *
+   * 4. { projects: { rows: [...] } }
+   *
+   * This function makes the dashboard handle all common formats.
+   */
+
+  const normalizeProjects = (data) => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.projects)) {
+      return data.projects;
+    }
+
+    if (Array.isArray(data?.data)) {
+      return data.data;
+    }
+
+    if (Array.isArray(data?.projects?.rows)) {
+      return data.projects.rows;
+    }
+
+    if (Array.isArray(data?.rows)) {
+      return data.rows;
+    }
+
+    return [];
+  };
+
+  // ============================================================
   // FETCH PROJECTS
   // ============================================================
 
   const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const data = await getProjects();
+
+      console.log("Manager projects response:", data);
+
+      const projectList = normalizeProjects(data);
+
+      console.log("Manager projects:", projectList);
+
+      setProjects(projectList);
+    } catch (error) {
+      console.error("Fetch manager projects error:", error);
+
+      /*
+       * api.js already removes token/user when response is 401.
+       */
+
+      if (
+        error.message?.toLowerCase().includes("unauthorized") ||
+        error.message?.toLowerCase().includes("token") ||
+        error.message?.toLowerCase().includes("authentication")
+      ) {
+        navigate("/login");
+        return;
+      }
+
+      setErrorMessage(
+        error.message || "Unable to load manager projects."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // LOAD PROJECTS
+  // ============================================================
+
+  useEffect(() => {
     const token = localStorage.getItem("token");
 
     if (!token) {
@@ -82,58 +172,8 @@ useEffect(() => {
       return;
     }
 
-    try {
-      setLoading(true);
-      setErrorMessage("");
-
-      const response = await fetch(`${API_URL}/api/projects`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      let data = [];
-
-      try {
-        data = await response.json();
-      } catch {
-        data = [];
-      }
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-
-        navigate("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            data.error ||
-            "Unable to load projects."
-        );
-      }
-
-      setProjects(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Fetch projects error:", error);
-
-      setErrorMessage(
-        error.message ||
-          "Unable to connect to the server."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [navigate]);
 
   // ============================================================
   // CLEAR MESSAGES
@@ -164,62 +204,29 @@ useEffect(() => {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     try {
       setCreatingProject(true);
       clearMessages();
 
-      const response = await fetch(`${API_URL}/api/projects`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          description,
-          status: "Active",
-        }),
+      const data = await createProject({
+        name,
+        description,
+        status: "Active",
       });
 
-      let data = {};
-
-      try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-
-        navigate("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        setErrorMessage(
-          data.message ||
-            data.error ||
-            "Failed to create project."
-        );
-
-        return;
-      }
+      console.log("Create project response:", data);
 
       /*
-       * Some backends return the created project directly.
-       * Others return { project: {...} }.
+       * Some backends return:
+       *
+       * { project: {...} }
+       *
+       * Others return:
+       *
+       * {...}
        */
 
-      const createdProject = data.project || data;
+      const createdProject = data?.project || data?.data || data;
 
       if (createdProject?.id) {
         setProjects((prev) => [
@@ -227,6 +234,10 @@ useEffect(() => {
           ...prev,
         ]);
       } else {
+        /*
+         * If backend does not return the created project,
+         * reload projects from the server.
+         */
         await fetchProjects();
       }
 
@@ -244,7 +255,7 @@ useEffect(() => {
       console.error("Create project error:", error);
 
       setErrorMessage(
-        "Unable to connect to the server."
+        error.message || "Failed to create project."
       );
     } finally {
       setCreatingProject(false);
@@ -293,60 +304,24 @@ useEffect(() => {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     try {
       setUpdatingProject(true);
       clearMessages();
 
-      const response = await fetch(
-        `${API_URL}/api/projects/${editingProject.id}`,
+      const data = await updateProject(
+        editingProject.id,
         {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name,
-            description,
-          }),
+          name,
+          description,
         }
       );
 
-      let data = {};
-
-      try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-
-        navigate("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        setErrorMessage(
-          data.message ||
-            data.error ||
-            "Failed to update project."
-        );
-
-        return;
-      }
+      console.log("Update project response:", data);
 
       const updatedProject =
-        data.project || data;
+        data?.project ||
+        data?.data ||
+        data;
 
       setProjects((prev) =>
         prev.map((project) =>
@@ -354,7 +329,7 @@ useEffect(() => {
           String(editingProject.id)
             ? {
                 ...project,
-                ...updatedProject,
+                ...(updatedProject || {}),
                 name,
                 description,
               }
@@ -377,7 +352,7 @@ useEffect(() => {
       console.error("Update project error:", error);
 
       setErrorMessage(
-        "Unable to connect to the server."
+        error.message || "Failed to update project."
       );
     } finally {
       setUpdatingProject(false);
@@ -407,53 +382,11 @@ useEffect(() => {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     try {
       setDeletingProjectId(project.id);
       clearMessages();
 
-      const response = await fetch(
-        `${API_URL}/api/projects/${project.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      let data = {};
-
-      try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-
-        navigate("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        setErrorMessage(
-          data.message ||
-            data.error ||
-            "Failed to delete project."
-        );
-
-        return;
-      }
+      await deleteProject(project.id);
 
       setProjects((prev) =>
         prev.filter(
@@ -470,7 +403,7 @@ useEffect(() => {
       console.error("Delete project error:", error);
 
       setErrorMessage(
-        "Unable to connect to the server."
+        error.message || "Failed to delete project."
       );
     } finally {
       setDeletingProjectId(null);
@@ -497,7 +430,26 @@ useEffect(() => {
   // ============================================================
 
   const openProject = (projectId) => {
+    if (!projectId) {
+      return;
+    }
+
     navigate(`/projects/${projectId}`);
+  };
+
+  // ============================================================
+  // CREATE PROJECT MODAL
+  // ============================================================
+
+  const openCreateProject = () => {
+    clearMessages();
+
+    setProjectForm({
+      name: "",
+      description: "",
+    });
+
+    setShowCreateProject(true);
   };
 
   // ============================================================
@@ -534,6 +486,7 @@ useEffect(() => {
         {/* LOGO */}
 
         <div className="flex items-center gap-3">
+
           <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-black">
             AI
           </div>
@@ -547,6 +500,7 @@ useEffect(() => {
               Manager Workspace
             </p>
           </div>
+
         </div>
 
         {/* NAVIGATION */}
@@ -573,6 +527,7 @@ useEffect(() => {
         <div className="flex items-center gap-3">
 
           <div className="hidden sm:block text-right">
+
             <p className="text-xs font-bold text-slate-800">
               {user?.name || "Manager"}
             </p>
@@ -580,6 +535,7 @@ useEffect(() => {
             <p className="text-[10px] text-slate-400">
               Project Manager
             </p>
+
           </div>
 
           <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-black">
@@ -600,7 +556,6 @@ useEffect(() => {
         </div>
 
       </header>
-
 
       {/* ======================================================
           MAIN CONTENT
@@ -632,23 +587,13 @@ useEffect(() => {
           </div>
 
           <button
-            onClick={() => {
-              clearMessages();
-
-              setProjectForm({
-                name: "",
-                description: "",
-              });
-
-              setShowCreateProject(true);
-            }}
+            onClick={openCreateProject}
             className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm"
           >
             + Create Project
           </button>
 
         </div>
-
 
         {/* ======================================================
             SUCCESS MESSAGE
@@ -660,7 +605,6 @@ useEffect(() => {
           </div>
         )}
 
-
         {/* ======================================================
             ERROR MESSAGE
         ====================================================== */}
@@ -670,7 +614,6 @@ useEffect(() => {
             {errorMessage}
           </div>
         )}
-
 
         {/* ======================================================
             STATISTICS
@@ -703,7 +646,6 @@ useEffect(() => {
             </p>
 
           </div>
-
 
           {/* ACTIVE PROJECTS */}
 
@@ -744,7 +686,6 @@ useEffect(() => {
 
         </div>
 
-
         {/* ======================================================
             PROJECT SECTION
         ====================================================== */}
@@ -775,7 +716,6 @@ useEffect(() => {
 
           </div>
 
-
           {/* ====================================================
               EMPTY PROJECTS
           ==================================================== */}
@@ -798,16 +738,7 @@ useEffect(() => {
               </p>
 
               <button
-                onClick={() => {
-                  clearMessages();
-
-                  setProjectForm({
-                    name: "",
-                    description: "",
-                  });
-
-                  setShowCreateProject(true);
-                }}
+                onClick={openCreateProject}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800"
               >
                 Create Project
@@ -816,10 +747,6 @@ useEffect(() => {
             </div>
 
           ) : (
-
-            /* ==================================================
-               PROJECT GRID
-            ================================================== */
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
 
@@ -835,6 +762,7 @@ useEffect(() => {
                   <div className="flex items-start justify-between mb-5">
 
                     <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-extrabold">
+
                       {(
                         project.name ||
                         project.title ||
@@ -842,6 +770,7 @@ useEffect(() => {
                       )
                         .charAt(0)
                         .toUpperCase()}
+
                     </div>
 
                     <span
@@ -860,7 +789,6 @@ useEffect(() => {
                     </span>
 
                   </div>
-
 
                   {/* PROJECT NAME */}
 
@@ -883,7 +811,6 @@ useEffect(() => {
                     </p>
 
                   </button>
-
 
                   {/* PROJECT ACTIONS */}
 
@@ -943,7 +870,6 @@ useEffect(() => {
 
       </main>
 
-
       {/* ======================================================
           CREATE PROJECT MODAL
       ====================================================== */}
@@ -953,8 +879,6 @@ useEffect(() => {
         <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-5">
 
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
-
-            {/* HEADER */}
 
             <div className="flex items-start justify-between p-6 border-b border-slate-100">
 
@@ -979,15 +903,13 @@ useEffect(() => {
                 onClick={() =>
                   setShowCreateProject(false)
                 }
-                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"
+                disabled={creatingProject}
+                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-50"
               >
                 ✕
               </button>
 
             </div>
-
-
-            {/* FORM */}
 
             <form
               onSubmit={handleCreateProject}
@@ -1011,11 +933,11 @@ useEffect(() => {
                   }
                   placeholder="e.g. AI Meeting Intelligence"
                   maxLength={100}
-                  className="w-full px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10"
+                  disabled={creatingProject}
+                  className="w-full px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 disabled:opacity-60"
                 />
 
               </div>
-
 
               <div>
 
@@ -1037,11 +959,11 @@ useEffect(() => {
                   placeholder="Describe the project..."
                   rows={4}
                   maxLength={500}
-                  className="w-full px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm resize-none focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10"
+                  disabled={creatingProject}
+                  className="w-full px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm resize-none focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 disabled:opacity-60"
                 />
 
               </div>
-
 
               <div className="flex gap-3 pt-1">
 
@@ -1076,7 +998,6 @@ useEffect(() => {
 
       )}
 
-
       {/* ======================================================
           EDIT PROJECT MODAL
       ====================================================== */}
@@ -1086,8 +1007,6 @@ useEffect(() => {
         <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-5">
 
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
-
-            {/* HEADER */}
 
             <div className="flex items-start justify-between p-6 border-b border-slate-100">
 
@@ -1119,9 +1038,6 @@ useEffect(() => {
 
             </div>
 
-
-            {/* FORM */}
-
             <form
               onSubmit={handleUpdateProject}
               className="p-6 space-y-5"
@@ -1150,7 +1066,6 @@ useEffect(() => {
 
               </div>
 
-
               <div>
 
                 <label className="block text-xs font-bold text-slate-700 mb-2">
@@ -1176,7 +1091,6 @@ useEffect(() => {
                 />
 
               </div>
-
 
               <div className="flex gap-3 pt-1">
 

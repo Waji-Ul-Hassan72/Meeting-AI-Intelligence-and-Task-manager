@@ -1,3 +1,4 @@
+
 const db = require("../config/db");
 const nodemailer = require("nodemailer");
 
@@ -41,11 +42,11 @@ const getUserRole = (req) => {
 };
 
 const isManager = (req) => {
-    return getUserRole(req) === "project manager";
+    return getUserRole(req) === "Project Manager";
 };
 
 const isMember = (req) => {
-    return getUserRole(req) === "developer";
+    return getUserRole(req) === "Developer";
 };
 
 // ============================================================
@@ -334,6 +335,13 @@ const getTaskCounts = async (
 
     const params = [];
 
+    /*
+        Manager and member can VIEW all tasks.
+
+        Therefore counts are not restricted to
+        tasks created by the current user.
+    */
+
     const conditions = [];
 
     if (projectId) {
@@ -443,6 +451,26 @@ const createTask = async (req, res) => {
             assigned_to !== ""
         ) {
 
+            /*
+                Only manager can assign tasks to members.
+
+                Member cannot assign tasks to other users.
+            */
+
+            if (!isManager(req)) {
+                return res.status(403).json({
+                    error:
+                        "Only managers can assign tasks to team members.",
+                });
+            }
+
+            if (!parsedProjectId) {
+                return res.status(400).json({
+                    error:
+                        "A project is required when assigning a task.",
+                });
+            }
+
             const assignedUserId =
                 parseInt(assigned_to, 10);
 
@@ -453,81 +481,39 @@ const createTask = async (req, res) => {
                 });
             }
 
-            /*
-                Project Managers can assign tasks to anyone in the project.
-                Developers (Members) can only assign tasks to themselves.
-            */
+            const memberResult =
+                await client.query(
+                    `
+                    SELECT
+                        u.id,
+                        u.name,
+                        u.email
 
-            if (isManager(req)) {
-                if (!parsedProjectId) {
-                    return res.status(400).json({
-                        error:
-                            "A project is required when assigning a task.",
-                    });
-                }
-            } else if (isMember(req)) {
-                if (assignedUserId !== user_id) {
-                    return res.status(403).json({
-                        error:
-                            "Developers can only assign tasks to themselves.",
-                    });
-                }
-            } else {
-                return res.status(403).json({
+                    FROM project_members pm
+
+                    INNER JOIN users u
+                        ON u.id = pm.user_id
+
+                    WHERE pm.project_id = $1
+                    AND pm.user_id = $2
+
+                    LIMIT 1
+                    `,
+                    [
+                        parsedProjectId,
+                        assignedUserId,
+                    ]
+                );
+
+            if (memberResult.rows.length === 0) {
+                return res.status(400).json({
                     error:
-                        "Only managers can assign tasks to team members.",
+                        "Selected user is not a member of this project.",
                 });
             }
 
-            if (parsedProjectId) {
-                const memberResult =
-                    await client.query(
-                        `
-                        SELECT
-                            u.id,
-                            u.name,
-                            u.email
-
-                        FROM project_members pm
-
-                        INNER JOIN users u
-                            ON u.id = pm.user_id
-
-                        WHERE pm.project_id = $1
-                        AND pm.user_id = $2
-
-                        LIMIT 1
-                        `,
-                        [
-                            parsedProjectId,
-                            assignedUserId,
-                        ]
-                    );
-
-                if (memberResult.rows.length === 0) {
-                    return res.status(400).json({
-                        error:
-                            "Selected user is not a member of this project.",
-                    });
-                }
-
-                assignedMember =
-                    memberResult.rows[0];
-            } else {
-                const userResult = await client.query(
-                    `
-                    SELECT id, name, email
-                    FROM users
-                    WHERE id = $1
-                    LIMIT 1
-                    `,
-                    [assignedUserId]
-                );
-
-                if (userResult.rows.length > 0) {
-                    assignedMember = userResult.rows[0];
-                }
-            }
+            assignedMember =
+                memberResult.rows[0];
         }
 
         // ====================================================
@@ -751,6 +737,20 @@ const getTasks = async (req, res) => {
             offset,
         } = getPagination(req);
 
+        /*
+            IMPORTANT:
+
+            Member can SEE all tasks.
+
+            Manager can SEE all tasks.
+
+            Therefore we DO NOT use:
+
+                WHERE t.user_id = $1
+
+            here.
+        */
+
         const counts =
             await getTaskCounts(
                 user_id
@@ -869,6 +869,13 @@ const getTasksByProject = async (req, res) => {
                     "Invalid project ID.",
             });
         }
+
+        /*
+            Members and managers can VIEW tasks
+            belonging to any existing project.
+
+            We only check that the project exists.
+        */
 
         const projectResult =
             await db.query(
@@ -1061,6 +1068,19 @@ const getTaskById = async (req, res) => {
             });
         }
 
+        /*
+            IMPORTANT:
+
+            Both manager and member can VIEW
+            a task.
+
+            We therefore do NOT check:
+
+                AND t.user_id = $2
+
+            here.
+        */
+
         const result =
             await db.query(
                 `
@@ -1152,6 +1172,21 @@ const updateTask = async (req, res) => {
             ...req.body,
         };
 
+        // ====================================================
+        // GET CURRENT TASK
+        // ====================================================
+
+        /*
+            We first find the task WITHOUT restricting
+            it to user_id.
+
+            Why?
+
+            Because manager can update any task.
+
+            Member can update only their own task.
+        */
+
         const existingTaskResult =
             await db.query(
                 `
@@ -1175,19 +1210,30 @@ const updateTask = async (req, res) => {
             existingTaskResult.rows[0];
 
         // ====================================================
-        // MEMBER PERMISSION CHECK (Edit)
-        // Members can edit tasks if they created them OR if the task is assigned to them
+        // MEMBER OWNERSHIP CHECK
         // ====================================================
+
+        /*
+            MEMBER:
+
+            Can only update a task where:
+
+                tasks.user_id = logged-in user
+
+            MANAGER:
+
+            Can update any task.
+        */
 
         if (
             isMember(req) &&
-            String(existingTask.user_id) !== String(user_id) &&
-            String(existingTask.assigned_to) !== String(user_id)
+            String(existingTask.user_id) !==
+                String(user_id)
         ) {
 
             return res.status(403).json({
                 error:
-                    "You can only edit tasks created by you or assigned to you.",
+                    "You can only edit tasks created by you.",
             });
         }
 
@@ -1219,6 +1265,10 @@ const updateTask = async (req, res) => {
 
         if (isMember(req)) {
 
+            /*
+                A member cannot change assignment.
+            */
+
             if (
                 body.assigned_to !== undefined
             ) {
@@ -1227,6 +1277,11 @@ const updateTask = async (req, res) => {
                         "Members cannot assign or reassign tasks.",
                 });
             }
+
+            /*
+                A member cannot change the project
+                of an existing task.
+            */
 
             if (
                 body.project_id !== undefined &&
@@ -1424,6 +1479,10 @@ const updateTask = async (req, res) => {
             });
         }
 
+        // ====================================================
+        // UPDATE TASK
+        // ====================================================
+
         values.push(id);
 
         const query = `
@@ -1611,6 +1670,17 @@ const deleteTask = async (req, res) => {
             });
         }
 
+        /*
+            First find the task.
+
+            We cannot directly use:
+
+                WHERE user_id = $2
+
+            because manager can delete
+            any task.
+        */
+
         const taskResult =
             await db.query(
                 `
@@ -1634,9 +1704,7 @@ const deleteTask = async (req, res) => {
             taskResult.rows[0];
 
         // ====================================================
-        // MEMBER OWNERSHIP CHECK (Delete)
-        // Members can ONLY delete tasks created by themselves.
-        // Tasks created by managers and assigned to members cannot be deleted by the member.
+        // MEMBER OWNERSHIP CHECK
         // ====================================================
 
         if (
@@ -1710,6 +1778,11 @@ const deleteAllProjectTasks =
                         "User authentication missing.",
                 });
             }
+
+            /*
+                Only manager can delete all
+                tasks belonging to a project.
+            */
 
             if (!isManager(req)) {
                 return res.status(403).json({
@@ -1799,3 +1872,4 @@ module.exports = {
     deleteAllProjectTasks,
 
 };
+

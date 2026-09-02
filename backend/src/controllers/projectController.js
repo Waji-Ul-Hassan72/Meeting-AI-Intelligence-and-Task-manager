@@ -1,337 +1,783 @@
+const db = require("../config/db");
 
-const db = require('../config/db');
+// ============================================================
+// HELPER: GET USER ID FROM JWT
+// ============================================================
 
-// Helper to safely extract user ID from JWT payload variations
-const getUserId = (req) =>
-    req.user?.id ||
-    req.user?.userId ||
-    req.user?.user_id;
-
-// ==========================================
-// CREATE PROJECT CONTROLLER
-// ==========================================
-const createProject = async (req, res) => {
-    try {
-        const { name, title, description, status } = req.body;
-
-        const projectName = (name || title || '').trim();
-        const projectStatus = status || 'Active';
-        const user_id = getUserId(req);
-
-        if (!user_id) {
-            return res.status(401).json({
-                error: "User authentication missing or invalid token."
-            });
-        }
-
-        if (!projectName) {
-            return res.status(400).json({
-                error: "Project name is required."
-            });
-        }
-
-        const result = await db.query(
-            `INSERT INTO projects
-                (name, description, status, created_by)
-             VALUES
-                ($1, $2, $3, $4)
-             RETURNING *`,
-            [
-                projectName,
-                description || '',
-                projectStatus,
-                user_id
-            ]
-        );
-
-        res.status(201).json(result.rows[0]);
-
-    } catch (error) {
-        console.error(
-            "❌ Error creating project:",
-            error.message
-        );
-
-        res.status(500).json({
-            error: error.message
-        });
-    }
+const getUserId = (req) => {
+    return (
+        req.user?.id ||
+        req.user?.userId ||
+        req.user?.user_id
+    );
 };
 
-// ==========================================
-// GET ALL PROJECTS CONTROLLER
-// ==========================================
-const getProjects = async (req, res) => {
+// ============================================================
+// CREATE PROJECT
+// ============================================================
+
+const createProject = async (req, res) => {
     try {
+        const {
+            name,
+            title,
+            description,
+            status,
+        } = req.body;
+
         const user_id = getUserId(req);
 
         if (!user_id) {
             return res.status(401).json({
                 error:
-                    "User authentication missing or invalid token."
+                    "User authentication missing or invalid token.",
             });
         }
 
+        const projectName = (
+            name ||
+            title ||
+            ""
+        ).trim();
+
+        if (!projectName) {
+            return res.status(400).json({
+                error:
+                    "Project name is required.",
+            });
+        }
+
+        const projectStatus =
+            status || "Active";
+
         const result = await db.query(
-            `SELECT *
-             FROM projects
-             WHERE created_by = $1
-                OR id IN (
-                    SELECT project_id
-                    FROM project_members
-                    WHERE user_id = $1
-                )
-             ORDER BY created_at DESC`,
-            [user_id]
+            `
+            INSERT INTO projects (
+                name,
+                description,
+                status,
+                created_by
+            )
+
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4
+            )
+
+            RETURNING *
+            `,
+            [
+                projectName,
+                description || "",
+                projectStatus,
+                user_id,
+            ]
         );
 
-        res.status(200).json(result.rows);
+        return res.status(201).json(
+            result.rows[0]
+        );
 
     } catch (error) {
+
         console.error(
-            "❌ Error fetching projects:",
-            error.message
+            "❌ Error creating project:",
+            error
         );
 
-        res.status(500).json({
-            error: error.message
+        return res.status(500).json({
+            error: error.message,
         });
     }
 };
 
-// ==========================================
-// GET SINGLE PROJECT BY ID CONTROLLER
-// ==========================================
-const getProjectById = async (req, res) => {
+// ============================================================
+// GET ALL PROJECTS
+//
+// USER CAN SEE:
+//
+// 1. Projects created by themselves
+// 2. Projects where they are a member
+//
+// IMPORTANT:
+//
+// Seeing a project does NOT automatically give edit/delete
+// permission.
+//
+// is_owner = true
+//      -> user created the project
+//
+// user_role = owner
+//      -> user created the project
+//
+// user_role = member
+//      -> user belongs to the project
+// ============================================================
+
+const getProjects = async (req, res) => {
     try {
-        const { id } = req.params;
+
         const user_id = getUserId(req);
 
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing or invalid token.",
+            });
+        }
+
         const result = await db.query(
-            `SELECT *
-             FROM projects
-             WHERE id = $1
-             AND (
-                 created_by = $2
-                 OR id IN (
-                     SELECT project_id
-                     FROM project_members
-                     WHERE user_id = $2
-                 )
-             )`,
-            [id, user_id]
+            `
+            SELECT
+                p.*,
+
+                CASE
+                    WHEN p.created_by = $1
+                    THEN true
+                    ELSE false
+                END AS is_owner,
+
+                CASE
+                    WHEN p.created_by = $1
+                    THEN 'owner'
+
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM project_members pm
+                        WHERE pm.project_id = p.id
+                        AND pm.user_id = $1
+                    )
+                    THEN 'member'
+
+                    ELSE null
+                END AS user_role
+
+            FROM projects p
+
+            WHERE
+                p.created_by = $1
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_members pm
+                    WHERE pm.project_id = p.id
+                    AND pm.user_id = $1
+                )
+
+            ORDER BY
+                p.created_at DESC
+            `,
+            [user_id]
+        );
+
+        return res.status(200).json({
+            projects: result.rows,
+        });
+
+    } catch (error) {
+
+        console.error(
+            "❌ Error fetching projects:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
+        });
+    }
+};
+
+// ============================================================
+// GET SINGLE PROJECT
+//
+// USER CAN VIEW:
+//
+// - Their own project
+// - Project where they are a member
+//
+// But viewing does NOT give modification permission.
+// ============================================================
+
+const getProjectById = async (req, res) => {
+
+    try {
+
+        const {
+            id,
+        } = req.params;
+
+        const user_id = getUserId(req);
+
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing or invalid token.",
+            });
+        }
+
+        if (!id) {
+            return res.status(400).json({
+                error:
+                    "Project ID is required.",
+            });
+        }
+
+        const result = await db.query(
+            `
+            SELECT
+
+                p.*,
+
+                CASE
+                    WHEN p.created_by = $2
+                    THEN true
+                    ELSE false
+                END AS is_owner,
+
+                CASE
+                    WHEN p.created_by = $2
+                    THEN 'owner'
+
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM project_members pm
+                        WHERE pm.project_id = p.id
+                        AND pm.user_id = $2
+                    )
+                    THEN 'member'
+
+                    ELSE null
+                END AS user_role
+
+            FROM projects p
+
+            WHERE p.id = $1
+
+            AND (
+                p.created_by = $2
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_members pm
+                    WHERE pm.project_id = p.id
+                    AND pm.user_id = $2
+                )
+            )
+
+            LIMIT 1
+            `,
+            [
+                id,
+                user_id,
+            ]
         );
 
         if (result.rows.length === 0) {
             return res.status(404).json({
-                message: "Project Not Found"
+                error:
+                    "Project not found or you do not have access to it.",
             });
         }
 
-        res.status(200).json(result.rows[0]);
-
-    } catch (error) {
-        console.error(
-            "❌ Error fetching project details:",
-            error.message
+        return res.status(200).json(
+            result.rows[0]
         );
 
-        res.status(500).json({
-            error: error.message
+    } catch (error) {
+
+        console.error(
+            "❌ Error fetching project details:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
         });
     }
 };
 
-// ==========================================
+// ============================================================
 // GET PROJECT TEAM MEMBERS
-// ==========================================
+//
+// Both owner and members can VIEW the team.
+//
+// This endpoint does NOT allow modifying the team.
+// ============================================================
+
 const getProjectMembers = async (req, res) => {
+
     try {
-        const { projectId } = req.params;
+
+        const {
+            projectId,
+        } = req.params;
+
         const user_id = getUserId(req);
 
         if (!user_id) {
             return res.status(401).json({
                 error:
-                    "User authentication missing or invalid token."
+                    "User authentication missing or invalid token.",
             });
         }
 
         if (!projectId) {
             return res.status(400).json({
-                error: "Project ID is required."
+                error:
+                    "Project ID is required.",
             });
         }
 
-        const parsedProjectId = parseInt(projectId, 10);
+        const parsedProjectId =
+            parseInt(projectId, 10);
 
-        if (Number.isNaN(parsedProjectId)) {
+        if (
+            Number.isNaN(parsedProjectId)
+        ) {
             return res.status(400).json({
-                error: "Invalid project ID."
+                error:
+                    "Invalid project ID.",
             });
         }
 
-        // Make sure the logged-in user has access
-        // to this project.
-        const projectAccess = await db.query(
-            `SELECT id
-             FROM projects
-             WHERE id = $1
-             AND (
-                 created_by = $2
-                 OR id IN (
-                     SELECT project_id
-                     FROM project_members
-                     WHERE user_id = $2
-                 )
-             )`,
-            [
-                parsedProjectId,
-                user_id
-            ]
-        );
+        // ----------------------------------------------------
+        // CHECK PROJECT ACCESS
+        // ----------------------------------------------------
 
-        if (projectAccess.rows.length === 0) {
+        const projectAccess =
+            await db.query(
+                `
+                SELECT
+                    p.id,
+
+                    CASE
+                        WHEN p.created_by = $2
+                        THEN true
+                        ELSE false
+                    END AS is_owner
+
+                FROM projects p
+
+                WHERE p.id = $1
+
+                AND (
+                    p.created_by = $2
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM project_members pm
+                        WHERE pm.project_id = p.id
+                        AND pm.user_id = $2
+                    )
+                )
+
+                LIMIT 1
+                `,
+                [
+                    parsedProjectId,
+                    user_id,
+                ]
+            );
+
+        if (
+            projectAccess.rows.length === 0
+        ) {
             return res.status(403).json({
                 error:
-                    "You do not have access to this project."
+                    "You do not have access to this project.",
             });
         }
 
-        // Get all members of this project.
-        const result = await db.query(
-            `SELECT
-                u.id,
-                u.name,
-                u.email
-             FROM project_members pm
-             INNER JOIN users u
-                ON pm.user_id = u.id
-             WHERE pm.project_id = $1
-             ORDER BY u.name ASC`,
-            [parsedProjectId]
-        );
+        // ----------------------------------------------------
+        // GET MEMBERS
+        // ----------------------------------------------------
+
+        const result =
+            await db.query(
+                `
+                SELECT
+                    u.id,
+                    u.name,
+                    u.email
+
+                FROM project_members pm
+
+                INNER JOIN users u
+                    ON pm.user_id = u.id
+
+                WHERE pm.project_id = $1
+
+                ORDER BY
+                    u.name ASC
+                `,
+                [
+                    parsedProjectId,
+                ]
+            );
 
         return res.status(200).json({
-            members: result.rows
+            members: result.rows,
         });
 
     } catch (error) {
+
         console.error(
             "❌ Error fetching project members:",
-            error.message
+            error
         );
 
         return res.status(500).json({
-            error: error.message
+            error: error.message,
         });
     }
 };
 
-// ==========================================
-// UPDATE PROJECT CONTROLLER
-// ==========================================
+// ============================================================
+// UPDATE PROJECT
+//
+// ONLY PROJECT CREATOR CAN UPDATE.
+//
+// A MEMBER CAN:
+//
+// ✅ View project
+// ❌ Edit project
+//
+// Backend checks:
+//
+//     created_by = user_id
+// ============================================================
+
 const updateProject = async (req, res) => {
+
     try {
-        const { id } = req.params;
+
+        const {
+            id,
+        } = req.params;
+
         const {
             name,
             title,
             description,
-            status
+            status,
         } = req.body;
 
-        const projectName = name || title;
         const user_id = getUserId(req);
 
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing or invalid token.",
+            });
+        }
+
+        if (!id) {
+            return res.status(400).json({
+                error:
+                    "Project ID is required.",
+            });
+        }
+
+        // ----------------------------------------------------
+        // PROJECT NAME
+        // ----------------------------------------------------
+
+        let projectName;
+
+        if (name !== undefined) {
+            projectName =
+                String(name).trim();
+        }
+        else if (title !== undefined) {
+            projectName =
+                String(title).trim();
+        }
+
+        if (
+            projectName !== undefined &&
+            !projectName
+        ) {
+            return res.status(400).json({
+                error:
+                    "Project name cannot be empty.",
+            });
+        }
+
+        // ----------------------------------------------------
+        // UPDATE ONLY OWNER'S PROJECT
+        // ----------------------------------------------------
+
         const result = await db.query(
-            `UPDATE projects
-             SET
-                name = COALESCE($1, name),
-                description = COALESCE($2, description),
-                status = COALESCE($3, status)
-             WHERE id = $4
-             AND created_by = $5
-             RETURNING *`,
+            `
+            UPDATE projects
+
+            SET
+                name =
+                    COALESCE(
+                        $1,
+                        name
+                    ),
+
+                description =
+                    COALESCE(
+                        $2,
+                        description
+                    ),
+
+                status =
+                    COALESCE(
+                        $3,
+                        status
+                    )
+
+            WHERE id = $4
+
+            AND created_by = $5
+
+            RETURNING *
+            `,
             [
-                projectName,
-                description,
-                status,
+                projectName !== undefined
+                    ? projectName
+                    : null,
+
+                description !== undefined
+                    ? description
+                    : null,
+
+                status !== undefined
+                    ? status
+                    : null,
+
                 id,
-                user_id
+                user_id,
             ]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                message:
-                    "Project Not Found or unauthorized to edit"
+        // ----------------------------------------------------
+        // NO PROJECT UPDATED
+        // ----------------------------------------------------
+
+        if (
+            result.rows.length === 0
+        ) {
+
+            const projectCheck =
+                await db.query(
+                    `
+                    SELECT
+                        id,
+                        created_by
+
+                    FROM projects
+
+                    WHERE id = $1
+
+                    LIMIT 1
+                    `,
+                    [id]
+                );
+
+            // Project does not exist
+            if (
+                projectCheck.rows.length === 0
+            ) {
+                return res.status(404).json({
+                    error:
+                        "Project not found.",
+                });
+            }
+
+            // Project exists but user is not owner
+            return res.status(403).json({
+                error:
+                    "You cannot edit a project created by another user.",
             });
         }
 
-        res.status(200).json(result.rows[0]);
+        return res.status(200).json(
+            result.rows[0]
+        );
 
     } catch (error) {
+
         console.error(
             "❌ Error updating project:",
-            error.message
+            error
         );
 
-        res.status(500).json({
-            error: error.message
+        return res.status(500).json({
+            error: error.message,
         });
     }
 };
 
-// ==========================================
-// DELETE PROJECT CONTROLLER
-// ==========================================
+// ============================================================
+// DELETE PROJECT
+//
+// ONLY PROJECT CREATOR CAN DELETE.
+//
+// Member:
+//
+// ✅ Can see project
+// ❌ Cannot delete project
+//
+// IMPORTANT:
+//
+// When the owner deletes the project, members will no longer
+// be able to retrieve it because getProjects() only returns
+// existing projects.
+//
+// Your database should ideally have:
+//
+// project_members.project_id
+//     ON DELETE CASCADE
+//
+// tasks.project_id
+//     ON DELETE CASCADE
+//
+// This makes associated records disappear automatically.
+// ============================================================
+
 const deleteProject = async (req, res) => {
+
     try {
-        const { id } = req.params;
+
+        const {
+            id,
+        } = req.params;
+
         const user_id = getUserId(req);
 
-        const result = await db.query(
-            `DELETE FROM projects
-             WHERE id = $1
-             AND created_by = $2
-             RETURNING *`,
-            [id, user_id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                message:
-                    "Project Not Found or unauthorized to delete"
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing or invalid token.",
             });
         }
 
-        res.status(200).json({
-            message: "Project Deleted Successfully"
+        if (!id) {
+            return res.status(400).json({
+                error:
+                    "Project ID is required.",
+            });
+        }
+
+        // ----------------------------------------------------
+        // CHECK PROJECT EXISTS
+        // ----------------------------------------------------
+
+        const projectCheck =
+            await db.query(
+                `
+                SELECT
+                    id,
+                    created_by
+
+                FROM projects
+
+                WHERE id = $1
+
+                LIMIT 1
+                `,
+                [id]
+            );
+
+        if (
+            projectCheck.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Project not found.",
+            });
+        }
+
+        // ----------------------------------------------------
+        // CHECK OWNERSHIP
+        // ----------------------------------------------------
+
+        if (
+            String(
+                projectCheck.rows[0].created_by
+            ) !== String(user_id)
+        ) {
+
+            return res.status(403).json({
+                error:
+                    "You cannot delete a project created by another user.",
+            });
+        }
+
+        // ----------------------------------------------------
+        // DELETE PROJECT
+        // ----------------------------------------------------
+
+        const result =
+            await db.query(
+                `
+                DELETE FROM projects
+
+                WHERE id = $1
+
+                AND created_by = $2
+
+                RETURNING *
+                `,
+                [
+                    id,
+                    user_id,
+                ]
+            );
+
+        if (
+            result.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Project not found.",
+            });
+        }
+
+        return res.status(200).json({
+
+            message:
+                "Project deleted successfully.",
+
+            project:
+                result.rows[0],
         });
 
     } catch (error) {
+
         console.error(
             "❌ Error deleting project:",
-            error.message
+            error
         );
 
-        res.status(500).json({
-            error: error.message
+        return res.status(500).json({
+            error: error.message,
         });
     }
 };
 
-// ==========================================
+// ============================================================
 // EXPORTS
-// ==========================================
+// ============================================================
 
 module.exports = {
-    createProject,
-    getProjects,
-    getProjectById,
-    getProjectMembers,
-    updateProject,
-    deleteProject
-};
 
+    createProject,
+
+    getProjects,
+
+    getProjectById,
+
+    getProjectMembers,
+
+    updateProject,
+
+    deleteProject,
+
+};

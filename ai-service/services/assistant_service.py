@@ -2,7 +2,7 @@
 import json
 import os
 import re
-
+from services.email_service import create_email_draft
 from dotenv import load_dotenv
 from google import genai
 from groq import Groq

@@ -4,17 +4,30 @@ import { useNavigate, useParams } from "react-router-dom";
 import { createTask } from "../services/api";
 import { Paperclip, X, FileText } from "lucide-react";
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:3000";
+
 function Task() {
   const navigate = useNavigate();
   const { projectId } = useParams();
 
   const fileInputRef = useRef(null);
 
+  // ============================================================
+  // TASK FORM STATE
+  // ============================================================
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [status, setStatus] = useState("Pending");
   const [dueDate, setDueDate] = useState("");
+
+  // ============================================================
+  // PROJECT MEMBERS
+  // ============================================================
 
   const [members, setMembers] = useState([]);
   const [assignedTo, setAssignedTo] = useState("");
@@ -25,28 +38,72 @@ function Task() {
 
   const [attachment, setAttachment] = useState(null);
 
+  // ============================================================
+  // UI STATE
+  // ============================================================
+
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   // ============================================================
+  // GET TOKEN
+  // ============================================================
+
+  const getToken = () => {
+    return (
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token")
+    );
+  };
+
+  // ============================================================
+  // UNAUTHORIZED
+  // ============================================================
+
+  const handleUnauthorized = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+
+    navigate("/login", {
+      replace: true,
+    });
+  };
+
+  // ============================================================
   // FETCH PROJECT MEMBERS
+  //
+  // Both owner and project members can VIEW the team.
+  //
+  // IMPORTANT:
+  // Permission to CREATE a task is still enforced by the
+  // backend task controller.
   // ============================================================
 
   useEffect(() => {
     const fetchMembers = async () => {
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
       if (!token) {
-        navigate("/login");
+        handleUnauthorized();
+        return;
+      }
+
+      if (!projectId) {
+        setErrorMessage("Project ID is missing.");
+        setLoadingMembers(false);
         return;
       }
 
       try {
         setLoadingMembers(true);
+        setErrorMessage("");
 
         const response = await fetch(
-          `http://localhost:3000/api/projects/${projectId}/members`,
+          `${API_URL}/api/projects/${projectId}/members`,
           {
             method: "GET",
             headers: {
@@ -56,14 +113,38 @@ function Task() {
           }
         );
 
-        const data = await response.json();
+        let data = {};
+
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+
+        // ------------------------------------------------------
+        // AUTHENTICATION
+        // ------------------------------------------------------
 
         if (response.status === 401) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          navigate("/login");
+          handleUnauthorized();
           return;
         }
+
+        // ------------------------------------------------------
+        // FORBIDDEN
+        // ------------------------------------------------------
+
+        if (response.status === 403) {
+          throw new Error(
+            data.message ||
+              data.error ||
+              "You do not have access to this project."
+          );
+        }
+
+        // ------------------------------------------------------
+        // OTHER ERRORS
+        // ------------------------------------------------------
 
         if (!response.ok) {
           throw new Error(
@@ -73,25 +154,41 @@ function Task() {
           );
         }
 
+        // ------------------------------------------------------
+        // RESPONSE
+        // Backend returns:
+        //
+        // {
+        //   members: [...]
+        // }
+        // ------------------------------------------------------
+
         const projectMembers = Array.isArray(data)
           ? data
-          : data.members || [];
+          : Array.isArray(data.members)
+          ? data.members
+          : [];
 
         setMembers(projectMembers);
+
       } catch (error) {
-        console.error("Error loading project members:", error);
+        console.error(
+          "Error loading project members:",
+          error
+        );
+
+        setMembers([]);
 
         setErrorMessage(
-          error.message || "Unable to load team members."
+          error.message ||
+            "Unable to load team members."
         );
       } finally {
         setLoadingMembers(false);
       }
     };
 
-    if (projectId) {
-      fetchMembers();
-    }
+    fetchMembers();
   }, [projectId, navigate]);
 
   // ============================================================
@@ -144,12 +241,17 @@ function Task() {
 
     setErrorMessage("");
 
+    // ----------------------------------------------------------
+    // VALIDATION
+    // ----------------------------------------------------------
+
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
 
-    // ============================================================
-    // VALIDATION
-    // ============================================================
+    if (!projectId) {
+      setErrorMessage("Project ID is missing.");
+      return;
+    }
 
     if (!trimmedTitle) {
       setErrorMessage("Task title is required.");
@@ -168,71 +270,142 @@ function Task() {
       return;
     }
 
+    // ----------------------------------------------------------
+    // VALIDATE ASSIGNEE
+    //
+    // Make sure the selected user actually exists in the
+    // project members returned by the backend.
+    // ----------------------------------------------------------
+
+    const selectedMember = members.find(
+      (member) =>
+        String(member.id) === String(assignedTo)
+    );
+
+    if (!selectedMember) {
+      setErrorMessage(
+        "Selected team member is not valid for this project."
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setErrorMessage(
-          "Your session has expired. Please log in again."
-        );
-
-        navigate("/login");
-        return;
-      }
-
-      const formattedProjectId = projectId
-        ? isNaN(projectId)
-          ? projectId
-          : parseInt(projectId, 10)
-        : null;
-
-      // ============================================================
+      // --------------------------------------------------------
       // FORM DATA
-      // ============================================================
+      // --------------------------------------------------------
 
       const formData = new FormData();
 
-      formData.append("title", trimmedTitle);
-      formData.append("description", trimmedDesc);
-      formData.append("priority", priority);
-      formData.append("status", status);
-      formData.append("due_date", dueDate || "");
+      formData.append(
+        "title",
+        trimmedTitle
+      );
+
+      formData.append(
+        "description",
+        trimmedDesc
+      );
+
+      formData.append(
+        "priority",
+        priority
+      );
+
+      formData.append(
+        "status",
+        status
+      );
+
+      formData.append(
+        "due_date",
+        dueDate || ""
+      );
+
       formData.append(
         "project_id",
-        formattedProjectId !== null
-          ? String(formattedProjectId)
-          : ""
+        String(projectId)
       );
 
       formData.append(
         "assigned_to",
-        String(parseInt(assignedTo, 10))
+        String(assignedTo)
       );
 
-      // ============================================================
+      // --------------------------------------------------------
       // OPTIONAL ATTACHMENT
-      // ============================================================
+      // --------------------------------------------------------
 
       if (attachment) {
-        formData.append("attachment", attachment);
+        formData.append(
+          "attachment",
+          attachment
+        );
       }
 
-      // ============================================================
+      // --------------------------------------------------------
       // CREATE TASK
-      // ============================================================
+      //
+      // createTask() should send the JWT token and FormData.
+      // --------------------------------------------------------
 
       await createTask(formData);
 
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
       navigate(-1);
+
     } catch (error) {
-      console.error("Error creating task:", error);
+      console.error(
+        "Error creating task:",
+        error
+      );
+
+      // --------------------------------------------------------
+      // HANDLE 401
+      // --------------------------------------------------------
+
+      if (
+        error?.response?.status === 401 ||
+        error?.status === 401
+      ) {
+        handleUnauthorized();
+        return;
+      }
+
+      // --------------------------------------------------------
+      // HANDLE 403
+      //
+      // Backend can reject a member trying to create a task.
+      // --------------------------------------------------------
+
+      if (
+        error?.response?.status === 403 ||
+        error?.status === 403
+      ) {
+        setErrorMessage(
+          error.message ||
+            "You do not have permission to create tasks in this project."
+        );
+
+        return;
+      }
 
       setErrorMessage(
         error.message ||
-          "Server Error: Unable to create task"
+          "Server Error: Unable to create task."
       );
+
     } finally {
       setLoading(false);
     }
@@ -268,6 +441,7 @@ function Task() {
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-sans overflow-y-auto">
+
       <div className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-2xl">
 
         {/* ======================================================
@@ -275,7 +449,9 @@ function Task() {
         ====================================================== */}
 
         <div className="flex items-start justify-between mb-4">
+
           <div>
+
             <span className="inline-block px-2.5 py-0.5 mb-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100 text-[10px] font-bold uppercase tracking-wider">
               New Task
             </span>
@@ -287,6 +463,7 @@ function Task() {
             <p className="text-xs text-slate-500 mt-0.5">
               Organize your execution schedule and details.
             </p>
+
           </div>
 
           <button
@@ -295,8 +472,9 @@ function Task() {
             className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
             aria-label="Close"
           >
-            ✕
+            <X size={16} />
           </button>
+
         </div>
 
         {/* ======================================================
@@ -323,6 +501,7 @@ function Task() {
           ==================================================== */}
 
           <div>
+
             <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
               Task Title *
             </label>
@@ -332,10 +511,13 @@ function Task() {
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
               placeholder="e.g. Implement Auth Middleware"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) =>
+                setTitle(e.target.value)
+              }
               maxLength={100}
               required
             />
+
           </div>
 
           {/* ====================================================
@@ -343,6 +525,7 @@ function Task() {
           ==================================================== */}
 
           <div>
+
             <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
               Description *
             </label>
@@ -351,10 +534,13 @@ function Task() {
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 resize-y h-[70px]"
               placeholder="Detail task requirements..."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) =>
+                setDescription(e.target.value)
+              }
               maxLength={500}
               required
             />
+
           </div>
 
           {/* ====================================================
@@ -364,6 +550,7 @@ function Task() {
           <div className="grid grid-cols-2 gap-2.5">
 
             <div>
+
               <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
                 Priority
               </label>
@@ -375,13 +562,23 @@ function Task() {
                   setPriority(e.target.value)
                 }
               >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
+                <option value="Low">
+                  Low
+                </option>
+
+                <option value="Medium">
+                  Medium
+                </option>
+
+                <option value="High">
+                  High
+                </option>
               </select>
+
             </div>
 
             <div>
+
               <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
                 Status
               </label>
@@ -393,14 +590,21 @@ function Task() {
                   setStatus(e.target.value)
                 }
               >
-                <option value="Pending">Pending</option>
+
+                <option value="Pending">
+                  Pending
+                </option>
+
                 <option value="In Progress">
                   In Progress
                 </option>
+
                 <option value="Completed">
                   Completed
                 </option>
+
               </select>
+
             </div>
 
           </div>
@@ -410,6 +614,7 @@ function Task() {
           ==================================================== */}
 
           <div>
+
             <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
               Assign To *
             </label>
@@ -420,9 +625,13 @@ function Task() {
               onChange={(e) =>
                 setAssignedTo(e.target.value)
               }
-              disabled={loadingMembers}
+              disabled={
+                loadingMembers ||
+                loading
+              }
               required
             >
+
               <option value="">
                 {loadingMembers
                   ? "Loading team members..."
@@ -440,13 +649,16 @@ function Task() {
                     member.email}
 
                   {member.email &&
-                  (member.name ||
+                  (
+                    member.name ||
                     member.full_name ||
-                    member.username)
+                    member.username
+                  )
                     ? ` (${member.email})`
                     : ""}
                 </option>
               ))}
+
             </select>
 
             {!loadingMembers &&
@@ -455,6 +667,7 @@ function Task() {
                   No team members found for this project.
                 </p>
               )}
+
           </div>
 
           {/* ====================================================
@@ -462,6 +675,7 @@ function Task() {
           ==================================================== */}
 
           <div>
+
             <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
               Due Date
             </label>
@@ -474,6 +688,7 @@ function Task() {
                 setDueDate(e.target.value)
               }
             />
+
           </div>
 
           {/* ====================================================
@@ -481,6 +696,7 @@ function Task() {
           ==================================================== */}
 
           <div>
+
             <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
               Attachment
             </label>
@@ -488,6 +704,7 @@ function Task() {
             <div className="flex items-center gap-2">
 
               {/* Hidden File Input */}
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -497,6 +714,7 @@ function Task() {
               />
 
               {/* Paperclip Button */}
+
               <button
                 type="button"
                 onClick={() =>
@@ -507,11 +725,16 @@ function Task() {
                 title="Attach a file"
                 aria-label="Attach a file"
               >
-                <Paperclip size={18} strokeWidth={2} />
+                <Paperclip
+                  size={18}
+                  strokeWidth={2}
+                />
               </button>
 
               {/* Selected File */}
+
               {attachment ? (
+
                 <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
 
                   <FileText
@@ -520,18 +743,24 @@ function Task() {
                   />
 
                   <div className="min-w-0 flex-1">
+
                     <p className="text-xs font-medium text-slate-700 truncate">
                       {attachment.name}
                     </p>
 
                     <p className="text-[10px] text-slate-400">
-                      {formatFileSize(attachment.size)}
+                      {formatFileSize(
+                        attachment.size
+                      )}
                     </p>
+
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleRemoveAttachment}
+                    onClick={
+                      handleRemoveAttachment
+                    }
                     className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-500 hover:text-red-600 transition-colors cursor-pointer flex-shrink-0"
                     title="Remove attachment"
                     aria-label="Remove attachment"
@@ -540,10 +769,13 @@ function Task() {
                   </button>
 
                 </div>
+
               ) : (
+
                 <p className="text-xs text-slate-400">
                   Optional — attach a file or image
                 </p>
+
               )}
 
             </div>
@@ -551,6 +783,7 @@ function Task() {
             <p className="mt-1.5 text-[10px] text-slate-400">
               Maximum file size: 10 MB
             </p>
+
           </div>
 
           {/* ====================================================
@@ -585,6 +818,7 @@ function Task() {
           </div>
 
         </form>
+
       </div>
     </div>
   );

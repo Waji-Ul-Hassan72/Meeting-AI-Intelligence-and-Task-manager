@@ -4,11 +4,38 @@
 // ============================================================
 
 const rawApiUrl =
-    import.meta.env.VITE_API_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost:3000";
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:3000";
 
 const API_URL = rawApiUrl.replace(/\/+$/, "");
+
+
+// ============================================================
+// GET AUTH TOKEN
+// ============================================================
+
+const getAuthToken = () => {
+  return (
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token")
+  );
+};
+
+
+// ============================================================
+// CLEAR AUTH DATA
+// ============================================================
+
+const clearAuthData = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("userName");
+
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("user");
+  sessionStorage.removeItem("userName");
+};
 
 
 // ============================================================
@@ -16,61 +43,74 @@ const API_URL = rawApiUrl.replace(/\/+$/, "");
 // ============================================================
 
 const apiRequest = async (endpoint, options = {}) => {
-    const token = localStorage.getItem("token");
+  const token = getAuthToken();
 
-    const isFormData = options.body instanceof FormData;
+  const isFormData =
+    options.body instanceof FormData;
 
-    const headers = {
-        ...(token
-            ? {
-                  Authorization: `Bearer ${token}`,
-              }
-            : {}),
+  const headers = {
+    ...(token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {}),
 
-        ...(isFormData
-            ? {}
-            : {
-                  "Content-Type": "application/json",
-              }),
+    // IMPORTANT:
+    // Do NOT manually set Content-Type for FormData.
+    // The browser automatically adds the multipart boundary.
+    ...(isFormData
+      ? {}
+      : {
+          "Content-Type": "application/json",
+        }),
 
-        ...(options.headers || {}),
-    };
+    ...(options.headers || {}),
+  };
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    let data = null;
-
-    try {
-        data = await response.json();
-    } catch {
-        data = null;
+  const response = await fetch(
+    `${API_URL}${endpoint}`,
+    {
+      ...options,
+      headers,
     }
+  );
 
-    // --------------------------------------------------------
-    // Unauthorized
-    // --------------------------------------------------------
 
-    if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-    }
+  // ==========================================================
+  // PARSE RESPONSE
+  // ==========================================================
 
-    // --------------------------------------------------------
-    // Error handling
-    // --------------------------------------------------------
+  let data = null;
 
-    if (!response.ok) {
-        throw new Error(
-            data?.error ||
-                data?.message ||
-                `Request failed with status ${response.status}`
-        );
-    }
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
 
-    return data;
+
+  // ==========================================================
+  // UNAUTHORIZED
+  // ==========================================================
+
+  if (response.status === 401) {
+    clearAuthData();
+  }
+
+
+  // ==========================================================
+  // ERROR HANDLING
+  // ==========================================================
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Request failed with status ${response.status}`
+    );
+  }
+
+  return data;
 };
 
 
@@ -78,23 +118,110 @@ const apiRequest = async (endpoint, options = {}) => {
 // PROJECTS
 // ============================================================
 
+
+// ------------------------------------------------------------
+// GET ALL PROJECTS
+// ------------------------------------------------------------
+
 export const getProjects = () => {
-    return apiRequest("/api/projects");
+  return apiRequest("/api/projects");
 };
 
+
+// ------------------------------------------------------------
+// GET SINGLE PROJECT
+// ------------------------------------------------------------
+
+export const getProjectById = (projectId) => {
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  return apiRequest(
+    `/api/projects/${projectId}`
+  );
+};
+
+
+// ------------------------------------------------------------
+// CREATE PROJECT
+// ------------------------------------------------------------
 
 export const createProject = (projectData) => {
-    return apiRequest("/api/projects", {
-        method: "POST",
-        body: JSON.stringify(projectData),
-    });
+  if (!projectData) {
+    throw new Error("Project data is required.");
+  }
+
+  return apiRequest("/api/projects", {
+    method: "POST",
+    body: JSON.stringify(projectData),
+  });
 };
 
 
+// ------------------------------------------------------------
+// UPDATE PROJECT
+// ------------------------------------------------------------
+
+export const updateProject = (
+  projectId,
+  projectData
+) => {
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  if (!projectData) {
+    throw new Error("Project data is required.");
+  }
+
+  return apiRequest(
+    `/api/projects/${projectId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(projectData),
+    }
+  );
+};
+
+
+// ------------------------------------------------------------
+// DELETE PROJECT
+// ------------------------------------------------------------
+
 export const deleteProject = (projectId) => {
-    return apiRequest(`/api/projects/${projectId}`, {
-        method: "DELETE",
-    });
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  return apiRequest(
+    `/api/projects/${projectId}`,
+    {
+      method: "DELETE",
+    }
+  );
+};
+
+
+// ============================================================
+// PROJECT MEMBERS
+// ============================================================
+
+
+// ------------------------------------------------------------
+// GET PROJECT MEMBERS
+// ------------------------------------------------------------
+
+export const getProjectMembers = (
+  projectId
+) => {
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  return apiRequest(
+    `/api/projects/${projectId}/members`
+  );
 };
 
 
@@ -102,153 +229,187 @@ export const deleteProject = (projectId) => {
 // TASKS
 // ============================================================
 
+
 // ------------------------------------------------------------
-// Get all tasks
+// GET ALL TASKS
 // ------------------------------------------------------------
 
-export const getTasks = (page = 1, limit = 10) => {
-    return apiRequest(
-        `/api/tasks?page=${Number(page)}&limit=${Number(limit)}`
-    );
+export const getTasks = (
+  page = 1,
+  limit = 10
+) => {
+  return apiRequest(
+    `/api/tasks?page=${Number(page)}&limit=${Number(limit)}`
+  );
 };
 
 
 // ------------------------------------------------------------
-// Get tasks for a specific project
+// GET PROJECT TASKS
 // ------------------------------------------------------------
 
 export const getProjectTasks = (
-    projectId,
-    page = 1,
-    limit = 10
+  projectId,
+  page = 1,
+  limit = 100
 ) => {
-    if (!projectId) {
-        throw new Error("Project ID is required.");
-    }
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
 
-    return apiRequest(
-        `/api/tasks/project/${projectId}?page=${Number(
-            page
-        )}&limit=${Number(limit)}`
-    );
+  return apiRequest(
+    `/api/tasks/project/${projectId}?page=${Number(
+      page
+    )}&limit=${Number(limit)}`
+  );
 };
 
 
 // ------------------------------------------------------------
-// Get single task
+// GET SINGLE TASK
 // ------------------------------------------------------------
 
 export const getTaskById = (taskId) => {
-    if (!taskId) {
-        throw new Error("Task ID is required.");
-    }
+  if (!taskId) {
+    throw new Error("Task ID is required.");
+  }
 
-    return apiRequest(`/api/tasks/${taskId}`);
+  return apiRequest(
+    `/api/tasks/${taskId}`
+  );
 };
 
 
-// ------------------------------------------------------------
-// Create task
+// ============================================================
+// CREATE TASK
+// ============================================================
 //
 // Supports:
-// - Normal task
-// - Task with attachment
 //
-// The frontend can pass either:
-// 1. FormData
-// 2. Normal JavaScript object
-// ------------------------------------------------------------
+// 1. Normal JavaScript object
+// 2. FormData
+//
+// FormData is required when uploading an attachment.
+//
+// ============================================================
 
 export const createTask = (taskData) => {
+  if (!taskData) {
+    throw new Error("Task data is required.");
+  }
 
-    // --------------------------------------------------------
-    // FormData
-    // --------------------------------------------------------
 
-    if (taskData instanceof FormData) {
-        return apiRequest("/api/tasks", {
-            method: "POST",
-            body: taskData,
-        });
-    }
+  // ----------------------------------------------------------
+  // FORM DATA
+  // ----------------------------------------------------------
 
-    // --------------------------------------------------------
-    // Normal JSON task
-    // --------------------------------------------------------
-
+  if (taskData instanceof FormData) {
     return apiRequest("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify(taskData),
+      method: "POST",
+      body: taskData,
     });
+  }
+
+
+  // ----------------------------------------------------------
+  // NORMAL JSON
+  // ----------------------------------------------------------
+
+  return apiRequest("/api/tasks", {
+    method: "POST",
+    body: JSON.stringify(taskData),
+  });
 };
 
 
-// ------------------------------------------------------------
-// Update task
+// ============================================================
+// UPDATE TASK
+// ============================================================
 //
 // Supports:
-// - Normal task update
-// - Task update with attachment
-// ------------------------------------------------------------
+//
+// 1. Normal JSON update
+// 2. FormData update
+//
+// ============================================================
 
-export const updateTask = (taskId, taskData) => {
+export const updateTask = (
+  taskId,
+  taskData
+) => {
+  if (!taskId) {
+    throw new Error("Task ID is required.");
+  }
 
-    if (!taskId) {
-        throw new Error("Task ID is required.");
-    }
+  if (!taskData) {
+    throw new Error("Task data is required.");
+  }
 
-    // --------------------------------------------------------
-    // FormData
-    // --------------------------------------------------------
 
-    if (taskData instanceof FormData) {
-        return apiRequest(`/api/tasks/${taskId}`, {
-            method: "PUT",
-            body: taskData,
-        });
-    }
+  // ----------------------------------------------------------
+  // FORM DATA
+  // ----------------------------------------------------------
 
-    // --------------------------------------------------------
-    // Normal JSON update
-    // --------------------------------------------------------
-
-    return apiRequest(`/api/tasks/${taskId}`, {
+  if (taskData instanceof FormData) {
+    return apiRequest(
+      `/api/tasks/${taskId}`,
+      {
         method: "PUT",
-        body: JSON.stringify(taskData),
-    });
+        body: taskData,
+      }
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // NORMAL JSON
+  // ----------------------------------------------------------
+
+  return apiRequest(
+    `/api/tasks/${taskId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(taskData),
+    }
+  );
 };
 
 
-// ------------------------------------------------------------
-// Delete single task
-// ------------------------------------------------------------
+// ============================================================
+// DELETE SINGLE TASK
+// ============================================================
 
 export const deleteTask = (taskId) => {
-    if (!taskId) {
-        throw new Error("Task ID is required.");
-    }
+  if (!taskId) {
+    throw new Error("Task ID is required.");
+  }
 
-    return apiRequest(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-    });
+  return apiRequest(
+    `/api/tasks/${taskId}`,
+    {
+      method: "DELETE",
+    }
+  );
 };
 
 
-// ------------------------------------------------------------
-// Delete all tasks belonging to a project
-// ------------------------------------------------------------
+// ============================================================
+// DELETE ALL PROJECT TASKS
+// ============================================================
 
-export const deleteAllProjectTasks = (projectId) => {
-    if (!projectId) {
-        throw new Error("Project ID is required.");
+export const deleteAllProjectTasks = (
+  projectId
+) => {
+  if (!projectId) {
+    throw new Error("Project ID is required.");
+  }
+
+  return apiRequest(
+    `/api/tasks/project/${projectId}/all`,
+    {
+      method: "DELETE",
     }
-
-    return apiRequest(
-        `/api/tasks/project/${projectId}/all`,
-        {
-            method: "DELETE",
-        }
-    );
+  );
 };
 
 
@@ -256,11 +417,25 @@ export const deleteAllProjectTasks = (projectId) => {
 // MEETINGS
 // ============================================================
 
-export const createMeeting = (meetingData) => {
-    return apiRequest("/api/meetings", {
-        method: "POST",
-        body: JSON.stringify(meetingData),
-    });
+
+// ------------------------------------------------------------
+// CREATE MEETING
+// ------------------------------------------------------------
+
+export const createMeeting = (
+  meetingData
+) => {
+  if (!meetingData) {
+    throw new Error("Meeting data is required.");
+  }
+
+  return apiRequest(
+    "/api/meetings",
+    {
+      method: "POST",
+      body: JSON.stringify(meetingData),
+    }
+  );
 };
 
 
@@ -269,60 +444,95 @@ export const createMeeting = (meetingData) => {
 // ============================================================
 
 export const askAIAssistant = async (
-    projectId,
-    question
+  projectId,
+  question
 ) => {
+  const token = getAuthToken();
 
-    const token = localStorage.getItem("token");
 
-    if (!token) {
-        throw new Error(
-            "Authentication token is missing."
-        );
-    }
+  // ----------------------------------------------------------
+  // VALIDATION
+  // ----------------------------------------------------------
 
-    if (!projectId) {
-        throw new Error(
-            "Project ID is required."
-        );
-    }
-
-    if (!question?.trim()) {
-        throw new Error(
-            "Question is required."
-        );
-    }
-
-    const response = await fetch(
-        "http://localhost:8000/assistant",
-        {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json",
-
-                Authorization:
-                    `Bearer ${token}`,
-            },
-
-            body: JSON.stringify({
-                project_id: projectId,
-                question: question.trim(),
-            }),
-        }
+  if (!token) {
+    throw new Error(
+      "Authentication token is missing."
     );
+  }
 
-    const data = await response.json();
+  if (!projectId) {
+    throw new Error(
+      "Project ID is required."
+    );
+  }
 
-    if (!response.ok) {
-        throw new Error(
-            data?.detail ||
-                data?.message ||
-                "AI assistant request failed."
-        );
+  if (!question?.trim()) {
+    throw new Error(
+      "Question is required."
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // FASTAPI AI ASSISTANT
+  // ----------------------------------------------------------
+
+  const response = await fetch(
+    "http://localhost:8000/assistant",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+
+        Authorization:
+          `Bearer ${token}`,
+      },
+
+      body: JSON.stringify({
+        project_id: projectId,
+        question: question.trim(),
+      }),
     }
+  );
 
-    return data;
+
+  // ----------------------------------------------------------
+  // RESPONSE
+  // ----------------------------------------------------------
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+
+  // ----------------------------------------------------------
+  // UNAUTHORIZED
+  // ----------------------------------------------------------
+
+  if (response.status === 401) {
+    clearAuthData();
+  }
+
+
+  // ----------------------------------------------------------
+  // ERROR
+  // ----------------------------------------------------------
+
+  if (!response.ok) {
+    throw new Error(
+      data?.detail ||
+        data?.message ||
+        data?.error ||
+        "AI assistant request failed."
+    );
+  }
+
+  return data;
 };
 
 

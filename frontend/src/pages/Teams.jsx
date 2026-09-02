@@ -52,10 +52,58 @@ function Team() {
   };
 
   // ============================================================
-  // FETCH MANAGER PROJECTS
+  // GET PROJECT ID
+  // ============================================================
+
+  const getProjectId = (project) => {
+    return project?.id || project?._id || project?.project_id;
+  };
+
+  // ============================================================
+  // GET PROJECT NAME
+  // ============================================================
+
+  const getProjectName = (project) => {
+    return (
+      project?.name ||
+      project?.title ||
+      project?.project_name ||
+      "Unnamed Project"
+    );
+  };
+
+  // ============================================================
+  // GET MEMBER ID
+  // ============================================================
+
+  const getMemberId = (member) => {
+    return (
+      member?.user_id ||
+      member?.id ||
+      member?.member_id
+    );
+  };
+
+  // ============================================================
+  // GET MEMBER NAME
+  // ============================================================
+
+  const getMemberName = (member) => {
+    return (
+      member?.name ||
+      member?.full_name ||
+      member?.username ||
+      "Unknown Member"
+    );
+  };
+
+  // ============================================================
+  // FETCH PROJECTS
   // ============================================================
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchProjects = async () => {
       const token = getToken();
 
@@ -68,20 +116,23 @@ function Team() {
         setLoadingProjects(true);
         setErrorMessage("");
 
-        const response = await fetch(`${API_URL}/api/projects`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const response = await fetch(
+          `${API_URL}/api/projects`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-        let data = [];
+        let data = {};
 
         try {
           data = await response.json();
         } catch {
-          data = [];
+          data = {};
         }
 
         if (response.status === 401) {
@@ -91,47 +142,108 @@ function Team() {
 
         if (!response.ok) {
           throw new Error(
-            data.message ||
-              data.error ||
+            data?.message ||
+              data?.error ||
               "Unable to load projects."
           );
         }
 
-        const projectList = Array.isArray(data) ? data : [];
+        /*
+          Backend may return either:
+
+          [
+            {...},
+            {...}
+          ]
+
+          OR:
+
+          {
+            projects: [...]
+          }
+
+          OR:
+
+          {
+            data: [...]
+          }
+        */
+
+        const projectList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.projects)
+          ? data.projects
+          : Array.isArray(data?.data)
+          ? data.data
+          : [];
+
+        if (cancelled) {
+          return;
+        }
 
         setProjects(projectList);
 
+        // Automatically select first project
         if (projectList.length > 0) {
-          setSelectedProject(String(projectList[0].id));
+          const firstProjectId = getProjectId(
+            projectList[0]
+          );
+
+          setSelectedProject(
+            firstProjectId !== undefined &&
+              firstProjectId !== null
+              ? String(firstProjectId)
+              : ""
+          );
         } else {
           setSelectedProject("");
+          setMembers([]);
         }
       } catch (error) {
-        console.error("Fetch projects error:", error);
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "Fetch projects error:",
+          error
+        );
+
+        setProjects([]);
+        setSelectedProject("");
+        setMembers([]);
 
         setErrorMessage(
           error.message ||
             "Unable to connect to the server."
         );
       } finally {
-        setLoadingProjects(false);
+        if (!cancelled) {
+          setLoadingProjects(false);
+        }
       }
     };
 
     fetchProjects();
+
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   // ============================================================
-  // FETCH TEAM MEMBERS
+  // FETCH MEMBERS FOR SELECTED PROJECT
   // ============================================================
 
   useEffect(() => {
-    if (!selectedProject) {
-      setMembers([]);
-      return;
-    }
+    let cancelled = false;
 
     const fetchMembers = async () => {
+      if (!selectedProject) {
+        setMembers([]);
+        return;
+      }
+
       const token = getToken();
 
       if (!token) {
@@ -143,20 +255,35 @@ function Team() {
         setLoadingMembers(true);
         setErrorMessage("");
 
-        const response = await fetch(`${API_URL}/api/teams`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        /*
+          IMPORTANT:
 
-        let data = [];
+          Do NOT use:
+
+              /api/teams
+
+          Instead fetch members for the selected project:
+
+              /api/projects/:projectId/members
+        */
+
+        const response = await fetch(
+          `${API_URL}/api/projects/${selectedProject}/members`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        let data = {};
 
         try {
           data = await response.json();
         } catch {
-          data = [];
+          data = {};
         }
 
         if (response.status === 401) {
@@ -166,23 +293,78 @@ function Team() {
 
         if (!response.ok) {
           throw new Error(
-            data.message ||
-              data.error ||
+            data?.message ||
+              data?.error ||
               "Unable to load team members."
           );
         }
 
-        const allMembers = Array.isArray(data) ? data : [];
+        /*
+          Backend may return:
 
-        const projectMembers = allMembers.filter(
-          (member) =>
-            String(member.project_id) ===
-            String(selectedProject)
-        );
+          [
+            {...},
+            {...}
+          ]
 
-        setMembers(projectMembers);
+          OR:
+
+          {
+            members: [...]
+          }
+
+          OR:
+
+          {
+            team: [...]
+          }
+
+          OR:
+
+          {
+            data: [...]
+          }
+        */
+
+        const memberList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.members)
+          ? data.members
+          : Array.isArray(data?.team)
+          ? data.team
+          : Array.isArray(data?.team_members)
+          ? data.team_members
+          : Array.isArray(data?.data)
+          ? data.data
+          : [];
+
+        if (cancelled) {
+          return;
+        }
+
+        /*
+          Make sure each member has project_id
+          available to the UI.
+        */
+
+        const normalizedMembers =
+          memberList.map((member) => ({
+            ...member,
+            project_id:
+              member?.project_id ||
+              selectedProject,
+          }));
+
+        setMembers(normalizedMembers);
       } catch (error) {
-        console.error("Fetch team members error:", error);
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "Fetch team members error:",
+          error
+        );
 
         setMembers([]);
 
@@ -191,11 +373,17 @@ function Team() {
             "Unable to load team members."
         );
       } finally {
-        setLoadingMembers(false);
+        if (!cancelled) {
+          setLoadingMembers(false);
+        }
       }
     };
 
     fetchMembers();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProject, navigate]);
 
   // ============================================================
@@ -205,14 +393,14 @@ function Team() {
   const handleAddMember = async (e) => {
     e.preventDefault();
 
-    const email = memberEmail.trim().toLowerCase();
-
-    // ----------------------------------------------------------
-    // VALIDATION
-    // ----------------------------------------------------------
+    const email = memberEmail
+      .trim()
+      .toLowerCase();
 
     if (!selectedProject) {
-      setErrorMessage("Please select a project first.");
+      setErrorMessage(
+        "Please select a project first."
+      );
       return;
     }
 
@@ -242,10 +430,6 @@ function Team() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      // --------------------------------------------------------
-      // SEND REQUEST TO INVITATION ENDPOINT
-      // --------------------------------------------------------
-
       const response = await fetch(
         `${API_URL}/api/project-invitations`,
         {
@@ -257,7 +441,7 @@ function Team() {
           },
 
           body: JSON.stringify({
-            email: email,
+            email,
             project_id: selectedProject,
           }),
         }
@@ -271,85 +455,63 @@ function Team() {
         data = {};
       }
 
-      // --------------------------------------------------------
-      // AUTH ERROR
-      // --------------------------------------------------------
-
       if (response.status === 401) {
         handleUnauthorized();
         return;
       }
 
-      // --------------------------------------------------------
-      // BACKEND ERROR
-      // --------------------------------------------------------
-
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            data.error ||
+          data?.message ||
+            data?.error ||
             "Unable to add team member."
         );
       }
 
-      // --------------------------------------------------------
+      // ========================================================
       // EXISTING USER
-      // --------------------------------------------------------
+      // ========================================================
 
-      if (data.type === "existing_user") {
+      if (data?.type === "existing_user") {
         setSuccessMessage(
-          data.message ||
+          data?.message ||
             "Team member added successfully."
         );
 
-        if (data.member) {
-          setMembers((prev) => {
-            const alreadyExists = prev.some(
-              (member) =>
-                String(member.id) ===
-                String(data.member.id)
-            );
+        /*
+          Instead of relying only on the response.member,
+          fetch the project members again.
 
-            if (alreadyExists) {
-              return prev;
-            }
+          This guarantees the UI matches the database.
+        */
 
-            return [
-              ...prev,
-              {
-                ...data.member,
-                project_id: selectedProject,
-              },
-            ];
-          });
-        }
+        await refreshMembers();
+
       }
 
-      // --------------------------------------------------------
+      // ========================================================
       // NEW USER / INVITATION
-      // --------------------------------------------------------
+      // ========================================================
 
-      else if (data.type === "invitation") {
+      else if (data?.type === "invitation") {
         setSuccessMessage(
-          data.message ||
+          data?.message ||
             `Invitation sent to ${email}.`
         );
       }
 
-      // --------------------------------------------------------
+      // ========================================================
       // GENERIC SUCCESS
-      // --------------------------------------------------------
+      // ========================================================
 
       else {
         setSuccessMessage(
-          data.message ||
+          data?.message ||
             "Team member operation completed successfully."
         );
-      }
 
-      // --------------------------------------------------------
-      // RESET FORM
-      // --------------------------------------------------------
+        await refreshMembers();
+      }
 
       setMemberEmail("");
       setShowAddMember(false);
@@ -369,6 +531,93 @@ function Team() {
       );
     } finally {
       setAddingMember(false);
+    }
+  };
+
+  // ============================================================
+  // REFRESH MEMBERS
+  // ============================================================
+
+  const refreshMembers = async () => {
+    if (!selectedProject) {
+      setMembers([]);
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setLoadingMembers(true);
+
+      const response = await fetch(
+        `${API_URL}/api/projects/${selectedProject}/members`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "Unable to refresh team members."
+        );
+      }
+
+      const memberList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.members)
+        ? data.members
+        : Array.isArray(data?.team)
+        ? data.team
+        : Array.isArray(data?.team_members)
+        ? data.team_members
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+      setMembers(
+        memberList.map((member) => ({
+          ...member,
+          project_id:
+            member?.project_id ||
+            selectedProject,
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "Refresh members error:",
+        error
+      );
+
+      setErrorMessage(
+        error.message ||
+          "Unable to refresh team members."
+      );
+    } finally {
+      setLoadingMembers(false);
     }
   };
 
@@ -428,23 +677,22 @@ function Team() {
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            data.error ||
+          data?.message ||
+            data?.error ||
             "Unable to remove team member."
         );
       }
 
-      // Remove member from current UI
       setMembers((prev) =>
         prev.filter(
           (member) =>
-            String(member.id) !== String(userId) &&
-            String(member.user_id) !== String(userId)
+            String(getMemberId(member)) !==
+            String(userId)
         )
       );
 
       setSuccessMessage(
-        data.message ||
+        data?.message ||
           "Team member removed successfully."
       );
 
@@ -485,21 +733,27 @@ function Team() {
   }
 
   // ============================================================
-  // MAIN UI
+  // SELECTED PROJECT OBJECT
+  // ============================================================
+
+  const selectedProjectData = projects.find(
+    (project) =>
+      String(getProjectId(project)) ===
+      String(selectedProject)
+  );
+
+  // ============================================================
+  // RENDER
   // ============================================================
 
   return (
     <div className="min-h-screen bg-[#f7f9fb] text-slate-900 font-sans">
 
-      {/* ========================================================
-          TOP HEADER
-          Navigation bar removed.
-          Only branding + Back to Dashboard remain.
-      ======================================================== */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
-
-        {/* BRAND */}
 
         <div className="flex items-center gap-3">
 
@@ -519,8 +773,6 @@ function Team() {
 
         </div>
 
-        {/* BACK TO DASHBOARD */}
-
         <button
           type="button"
           onClick={() =>
@@ -533,15 +785,15 @@ function Team() {
 
       </header>
 
-      {/* ========================================================
-          MAIN CONTENT
-      ======================================================== */}
+      {/* ======================================================
+          MAIN
+      ====================================================== */}
 
       <main className="max-w-7xl mx-auto px-5 lg:px-8 py-8">
 
-        {/* ======================================================
+        {/* ====================================================
             PAGE HEADER
-        ====================================================== */}
+        ==================================================== */}
 
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-8">
 
@@ -574,6 +826,7 @@ function Team() {
               value={selectedProject}
               onChange={(e) => {
                 setSelectedProject(e.target.value);
+                setMembers([]);
                 setErrorMessage("");
                 setSuccessMessage("");
               }}
@@ -585,16 +838,20 @@ function Team() {
                   No projects available
                 </option>
               ) : (
-                projects.map((project) => (
-                  <option
-                    key={project.id}
-                    value={project.id}
-                  >
-                    {project.name ||
-                      project.title ||
-                      "Unnamed Project"}
-                  </option>
-                ))
+                projects.map((project) => {
+
+                  const projectId =
+                    getProjectId(project);
+
+                  return (
+                    <option
+                      key={projectId}
+                      value={projectId}
+                    >
+                      {getProjectName(project)}
+                    </option>
+                  );
+                })
               )}
 
             </select>
@@ -603,9 +860,9 @@ function Team() {
 
         </div>
 
-        {/* ======================================================
+        {/* ====================================================
             ALERTS
-        ====================================================== */}
+        ==================================================== */}
 
         {errorMessage && (
           <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start justify-between gap-4">
@@ -633,13 +890,39 @@ function Team() {
           </div>
         )}
 
-        {/* ======================================================
-            TEAM MEMBERS SECTION
-        ====================================================== */}
+        {/* ====================================================
+            SELECTED PROJECT INFO
+        ==================================================== */}
+
+        {selectedProjectData && (
+          <div className="mb-5 bg-white border border-slate-200 rounded-2xl px-6 py-5">
+
+            <p className="text-[10px] uppercase tracking-wider font-bold text-teal-600">
+              Selected Project
+            </p>
+
+            <h3 className="text-lg font-extrabold text-slate-900 mt-1">
+              {getProjectName(
+                selectedProjectData
+              )}
+            </h3>
+
+            {selectedProjectData.description && (
+              <p className="text-xs text-slate-500 mt-1">
+                {selectedProjectData.description}
+              </p>
+            )}
+
+          </div>
+        )}
+
+        {/* ====================================================
+            TEAM MEMBERS
+        ==================================================== */}
 
         <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
 
-          {/* SECTION HEADER */}
+          {/* HEADER */}
 
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 
@@ -723,17 +1006,14 @@ function Team() {
               {members.map((member) => {
 
                 const memberName =
-                  member.name ||
-                  member.full_name ||
-                  "Unknown Member";
+                  getMemberName(member);
 
                 const memberEmail =
-                  member.email ||
+                  member?.email ||
                   "No email available";
 
                 const memberId =
-                  member.user_id ||
-                  member.id;
+                  getMemberId(member);
 
                 return (
                   <div
@@ -765,19 +1045,21 @@ function Team() {
 
                     </div>
 
-                    {/* MEMBER ROLE + REMOVE */}
+                    {/* ROLE + REMOVE */}
 
                     <div className="flex items-center gap-4 shrink-0">
 
                       <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold">
-                        {member.role ||
+                        {member?.role ||
                           "Developer"}
                       </span>
 
                       <button
                         type="button"
                         onClick={() =>
-                          handleRemoveMember(memberId)
+                          handleRemoveMember(
+                            memberId
+                          )
                         }
                         disabled={
                           removingMember ===
@@ -805,9 +1087,9 @@ function Team() {
 
       </main>
 
-      {/* ========================================================
-          ADD MEMBER / INVITATION MODAL
-      ======================================================== */}
+      {/* ======================================================
+          ADD MEMBER MODAL
+      ====================================================== */}
 
       {showAddMember && (
 
@@ -815,7 +1097,7 @@ function Team() {
 
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
 
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div className="p-6 border-b border-slate-100 flex items-start justify-between">
 
@@ -868,7 +1150,9 @@ function Team() {
                   type="email"
                   value={memberEmail}
                   onChange={(e) =>
-                    setMemberEmail(e.target.value)
+                    setMemberEmail(
+                      e.target.value
+                    )
                   }
                   placeholder="developer@example.com"
                   autoFocus
@@ -893,12 +1177,11 @@ function Team() {
                 </p>
 
                 <p className="text-xs font-bold text-slate-800 mt-1">
-                  {projects.find(
-                    (project) =>
-                      String(project.id) ===
-                      String(selectedProject)
-                  )?.name ||
-                    "Selected Project"}
+                  {selectedProjectData
+                    ? getProjectName(
+                        selectedProjectData
+                      )
+                    : "Selected Project"}
                 </p>
 
               </div>

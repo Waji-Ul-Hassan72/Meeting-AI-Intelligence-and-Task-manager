@@ -1,7 +1,9 @@
-
 import { useEffect, useMemo, useState } from "react";
+
 import AIAssistant from "../components/AIAssistant";
+
 import { useNavigate, useParams } from "react-router-dom";
+
 import {
   ArrowLeft,
   Plus,
@@ -29,13 +31,20 @@ function ProjectDetails() {
   // =========================================================
   // PROJECT STATE
   // =========================================================
+
   const [project, setProject] = useState(null);
   const [loadingProject, setLoadingProject] = useState(true);
   const [projectError, setProjectError] = useState("");
 
   // =========================================================
+  // CURRENT USER STATE (For Member vs Manager verification)
+  // =========================================================
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // =========================================================
   // TASK STATE
   // =========================================================
+
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState("");
@@ -43,6 +52,7 @@ function ProjectDetails() {
   // =========================================================
   // UI STATE
   // =========================================================
+
   const [activeTab, setActiveTab] = useState("tasks");
   const [activeTaskStatus, setActiveTaskStatus] = useState("all");
   const [taskViewMode, setTaskViewMode] = useState("list");
@@ -50,6 +60,7 @@ function ProjectDetails() {
   // =========================================================
   // MODALS
   // =========================================================
+
   const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [deletingAllTasks, setDeletingAllTasks] = useState(false);
 
@@ -61,6 +72,7 @@ function ProjectDetails() {
   // =========================================================
   // EDIT TASK MODAL
   // =========================================================
+
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
@@ -72,32 +84,9 @@ function ProjectDetails() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // =========================================================
-  // CURRENT USER & ROLE
-  // =========================================================
-  const getCurrentUser = () => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  };
-
-  const user = getCurrentUser();
-
-  const userRole = String(
-    user?.role || user?.user_role || ""
-  )
-    .trim()
-    .toLowerCase();
-
-  const isProjectManager =
-    userRole === "project manager" ||
-    userRole === "project_manager" ||
-    userRole === "manager";
-
-  // =========================================================
   // GET TOKEN
   // =========================================================
+
   const getToken = () => {
     return (
       localStorage.getItem("token") ||
@@ -106,8 +95,25 @@ function ProjectDetails() {
   };
 
   // =========================================================
+  // GET CURRENT USER FROM STORAGE
+  // =========================================================
+  useEffect(() => {
+    try {
+      const storedUser =
+        localStorage.getItem("user") ||
+        sessionStorage.getItem("user");
+      if (storedUser) {
+        setCurrentUser(JSON.parse(storedUser));
+      }
+    } catch (e) {
+      console.error("Failed to parse user from storage", e);
+    }
+  }, []);
+
+  // =========================================================
   // UNAUTHORIZED
   // =========================================================
+
   const handleUnauthorized = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -121,8 +127,80 @@ function ProjectDetails() {
   };
 
   // =========================================================
+  // PERMISSION HELPERS
+  // =========================================================
+
+  const isProjectOwner =
+    project?.is_owner === true ||
+    String(project?.user_role || "")
+      .trim()
+      .toLowerCase() === "owner";
+
+  const projectUserRole =
+    String(project?.user_role || "")
+      .trim()
+      .toLowerCase();
+
+  // Helper to check if the current logged-in user created the task
+  const isTaskCreator = (task) => {
+    if (!currentUser) return false;
+    const currentUserId = currentUser.id || currentUser._id;
+    
+    const creatorId =
+      task.created_by_id ||
+      task.createdBy ||
+      task.created_by ||
+      (typeof task.creator === "object" ? task.creator?.id || task.creator?._id : task.creator);
+
+    if (currentUserId && creatorId) {
+      return String(currentUserId) === String(creatorId);
+    }
+
+    // Fallback comparison by email/name if IDs aren't directly aligned
+    const creatorEmail = task.created_by_email || (typeof task.creator === "object" ? task.creator?.email : null);
+    if (currentUser.email && creatorEmail) {
+      return currentUser.email.toLowerCase() === creatorEmail.toLowerCase();
+    }
+
+    return false;
+  };
+
+  // Can the user edit this specific task?
+  // Owners can edit any task. Members can edit tasks they created OR tasks assigned to them (to change status).
+  const canEditTask = (task) => {
+    if (isProjectOwner) return true;
+    if (isTaskCreator(task)) return true;
+
+    // Check if task is assigned to current user
+    const currentUserId = currentUser?.id || currentUser?._id;
+    const assigneeId =
+      task.assignee_id ||
+      task.assigned_to ||
+      (typeof task.assignee === "object" ? task.assignee?.id || task.assignee?._id : null);
+
+    if (currentUserId && assigneeId && String(currentUserId) === String(assigneeId)) {
+      return true;
+    }
+
+    const assigneeEmail = task.assigned_to_email || (typeof task.assignee === "object" ? task.assignee?.email : null);
+    if (currentUser?.email && assigneeEmail && currentUser.email.toLowerCase() === assigneeEmail.toLowerCase()) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Can the user delete this specific task?
+  // Members can ONLY delete tasks they created themselves. They cannot delete manager-assigned tasks.
+  const canDeleteTask = (task) => {
+    if (isProjectOwner) return true;
+    return isTaskCreator(task);
+  };
+
+  // =========================================================
   // FETCH PROJECT
   // =========================================================
+
   useEffect(() => {
     const fetchProject = async () => {
       const token = getToken();
@@ -170,7 +248,10 @@ function ProjectDetails() {
 
         setProject(data);
       } catch (error) {
-        console.error("Project fetch error:", error);
+        console.error(
+          "Project fetch error:",
+          error
+        );
 
         setProjectError(
           error.message ||
@@ -189,6 +270,7 @@ function ProjectDetails() {
   // =========================================================
   // FETCH TASKS
   // =========================================================
+
   useEffect(() => {
     const fetchTasks = async () => {
       const token = getToken();
@@ -242,7 +324,10 @@ function ProjectDetails() {
 
         setTasks(taskList);
       } catch (error) {
-        console.error("Tasks fetch error:", error);
+        console.error(
+          "Tasks fetch error:",
+          error
+        );
 
         setTaskError(
           error.message ||
@@ -261,6 +346,7 @@ function ProjectDetails() {
   // =========================================================
   // ATTACHMENT URL
   // =========================================================
+
   const getAttachmentUrl = (task) => {
     if (!task) return null;
 
@@ -277,7 +363,6 @@ function ProjectDetails() {
       return null;
     }
 
-    // If backend returns an attachment object
     if (typeof attachment === "object") {
       const objectUrl =
         attachment.url ||
@@ -300,7 +385,6 @@ function ProjectDetails() {
       return `${API_URL}/${String(objectUrl).replace(/^\/+/, "")}`;
     }
 
-    // If backend already returns a complete URL
     if (
       String(attachment).startsWith("http://") ||
       String(attachment).startsWith("https://")
@@ -308,15 +392,16 @@ function ProjectDetails() {
       return attachment;
     }
 
-    // If backend returns a relative path
     return `${API_URL}/${String(attachment).replace(/^\/+/, "")}`;
   };
 
   // =========================================================
   // OPEN ATTACHMENT
   // =========================================================
+
   const handleViewAttachment = (task) => {
-    const attachmentUrl = getAttachmentUrl(task);
+    const attachmentUrl =
+      getAttachmentUrl(task);
 
     if (!attachmentUrl) {
       return;
@@ -332,13 +417,14 @@ function ProjectDetails() {
   // =========================================================
   // NORMALIZE STATUS
   // =========================================================
+
   const normalizeStatus = (status) => {
     if (!status) return "todo";
 
     const normalized = String(status)
       .trim()
       .toLowerCase()
-      .replace(/[_-]/g, " ");
+      .replace(/[\_-]/g, " ");
 
     if (
       normalized === "completed" ||
@@ -362,6 +448,7 @@ function ProjectDetails() {
   // =========================================================
   // TASK COUNTS
   // =========================================================
+
   const taskCounts = useMemo(() => {
     return {
       all: tasks.length,
@@ -373,12 +460,14 @@ function ProjectDetails() {
 
       "in-progress": tasks.filter(
         (t) =>
-          normalizeStatus(t.status) === "in-progress"
+          normalizeStatus(t.status) ===
+          "in-progress"
       ).length,
 
       completed: tasks.filter(
         (t) =>
-          normalizeStatus(t.status) === "completed"
+          normalizeStatus(t.status) ===
+          "completed"
       ).length,
     };
   }, [tasks]);
@@ -386,6 +475,7 @@ function ProjectDetails() {
   // =========================================================
   // FILTERED TASKS
   // =========================================================
+
   const filteredTasks = useMemo(() => {
     if (activeTaskStatus === "all") {
       return tasks;
@@ -401,8 +491,10 @@ function ProjectDetails() {
   // =========================================================
   // STATUS LABEL
   // =========================================================
+
   const getStatusLabel = (status) => {
-    const normalized = normalizeStatus(status);
+    const normalized =
+      normalizeStatus(status);
 
     if (normalized === "completed") {
       return "COMPLETED";
@@ -418,8 +510,10 @@ function ProjectDetails() {
   // =========================================================
   // STATUS STYLE
   // =========================================================
+
   const getStatusStyle = (status) => {
-    const normalized = normalizeStatus(status);
+    const normalized =
+      normalizeStatus(status);
 
     if (normalized === "completed") {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -435,6 +529,7 @@ function ProjectDetails() {
   // =========================================================
   // ASSIGNEE NAME
   // =========================================================
+
   const getAssigneeName = (task) => {
     if (task.assignee) {
       if (typeof task.assignee === "string") {
@@ -463,12 +558,17 @@ function ProjectDetails() {
   // =========================================================
   // FORMAT DATE
   // =========================================================
+
   const formatDate = (date) => {
     if (!date) return "—";
 
     const parsedDate = new Date(date);
 
-    if (Number.isNaN(parsedDate.getTime())) {
+    if (
+      Number.isNaN(
+        parsedDate.getTime()
+      )
+    ) {
       return "—";
     }
 
@@ -485,6 +585,7 @@ function ProjectDetails() {
   // =========================================================
   // CREATE TASK
   // =========================================================
+
   const handleCreateTask = () => {
     navigate(`/add-task/${id}`);
   };
@@ -492,7 +593,12 @@ function ProjectDetails() {
   // =========================================================
   // OPEN EDIT MODAL
   // =========================================================
+
   const handleOpenEditModal = (task) => {
+    if (!canEditTask(task)) {
+      return;
+    }
+
     setEditingTask(task);
 
     setEditFormName(
@@ -517,7 +623,11 @@ function ProjectDetails() {
     if (rawDate) {
       const d = new Date(rawDate);
 
-      if (!Number.isNaN(d.getTime())) {
+      if (
+        !Number.isNaN(
+          d.getTime()
+        )
+      ) {
         setEditFormDueDate(
           d.toISOString().split("T")[0]
         );
@@ -534,10 +644,15 @@ function ProjectDetails() {
   // =========================================================
   // SAVE EDIT TASK
   // =========================================================
+
   const handleSaveEditTask = async (e) => {
     e.preventDefault();
 
     if (!editingTask) return;
+
+    if (!canEditTask(editingTask)) {
+      return;
+    }
 
     const token = getToken();
 
@@ -546,8 +661,30 @@ function ProjectDetails() {
       return;
     }
 
+    // If a member is editing a task they didn't create (e.g. manager assigned), 
+    // they should only be permitted to update the status, keeping title/desc intact if needed, 
+    // or we can allow backend rules to handle it. Here we send the form data.
+    const isOwnerOrCreator = isProjectOwner || isTaskCreator(editingTask);
+
     try {
       setSavingEdit(true);
+
+      const payload = isOwnerOrCreator
+        ? {
+            name: editFormName,
+            title: editFormName,
+            description: editFormDesc,
+            status: editFormStatus,
+            due_date: editFormDueDate || null,
+          }
+        : {
+            // Members updating assigned tasks from managers can change status
+            status: editFormStatus,
+            name: editingTask.name || editingTask.title,
+            title: editingTask.name || editingTask.title,
+            description: editingTask.description,
+            due_date: editingTask.due_date || editingTask.dueDate || null,
+          };
 
       const response = await fetch(
         `${API_URL}/api/tasks/${editingTask.id}`,
@@ -559,14 +696,7 @@ function ProjectDetails() {
             "Content-Type": "application/json",
           },
 
-          body: JSON.stringify({
-            name: editFormName,
-            title: editFormName,
-            description: editFormDesc,
-            status: editFormStatus,
-            due_date:
-              editFormDueDate || null,
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -594,14 +724,11 @@ function ProjectDetails() {
             ? {
                 ...t,
                 ...data,
-                name: editFormName,
-                title: editFormName,
-                description:
-                  editFormDesc,
-                status:
-                  editFormStatus,
-                due_date:
-                  editFormDueDate,
+                name: isOwnerOrCreator ? editFormName : t.name,
+                title: isOwnerOrCreator ? editFormName : t.title,
+                description: isOwnerOrCreator ? editFormDesc : t.description,
+                status: editFormStatus,
+                due_date: isOwnerOrCreator ? editFormDueDate : t.due_date,
               }
             : t
         )
@@ -627,7 +754,12 @@ function ProjectDetails() {
   // =========================================================
   // DELETE TASK MODAL
   // =========================================================
+
   const openDeleteTaskModal = (task) => {
+    if (!canDeleteTask(task)) {
+      return;
+    }
+
     setTaskToDelete(task);
     setShowDeleteModal(true);
   };
@@ -635,8 +767,13 @@ function ProjectDetails() {
   // =========================================================
   // DELETE TASK
   // =========================================================
+
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
+
+    if (!canDeleteTask(taskToDelete)) {
+      return;
+    }
 
     const token = getToken();
 
@@ -709,7 +846,12 @@ function ProjectDetails() {
   // =========================================================
   // DELETE ALL TASKS
   // =========================================================
+
   const handleDeleteAllTasks = async () => {
+    if (!isProjectOwner) {
+      return;
+    }
+
     const token = getToken();
 
     if (!token) {
@@ -771,11 +913,13 @@ function ProjectDetails() {
   // =========================================================
   // TRANSCRIPTION NAVIGATION
   // =========================================================
+
   const handleTabClick = (tab) => {
     if (tab === "transcription") {
       navigate(
         `/projects/${id}/transcription`
       );
+
       return;
     }
 
@@ -785,6 +929,7 @@ function ProjectDetails() {
   // =========================================================
   // LOADING
   // =========================================================
+
   if (loadingProject) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -796,6 +941,7 @@ function ProjectDetails() {
   // =========================================================
   // PROJECT ERROR
   // =========================================================
+
   if (projectError) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -830,6 +976,7 @@ function ProjectDetails() {
   // =========================================================
   // UI
   // =========================================================
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
 
@@ -883,7 +1030,9 @@ function ProjectDetails() {
 
             <div className="flex items-center gap-2.5">
 
-              {isProjectManager &&
+              {/* DELETE ALL TASKS - OWNER ONLY */}
+
+              {isProjectOwner &&
                 tasks.length > 0 && (
                   <button
                     onClick={() =>
@@ -900,21 +1049,20 @@ function ProjectDetails() {
                   </button>
                 )}
 
-              {isProjectManager && (
-                <button
-                  onClick={
-                    handleCreateTask
-                  }
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
-                >
-                  <Plus
-                    size={15}
-                    strokeWidth={2.5}
-                  />
+              {/* ADD TASK - AVAILABLE TO ALL MEMBERS AND OWNERS */}
+              <button
+                onClick={
+                  handleCreateTask
+                }
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
+              >
+                <Plus
+                  size={15}
+                  strokeWidth={2.5}
+                />
 
-                  Add Task
-                </button>
-              )}
+                Add Task
+              </button>
 
             </div>
 
@@ -969,6 +1117,7 @@ function ProjectDetails() {
       <main className="max-w-7xl mx-auto px-6 py-7">
 
         {activeTab === "tasks" && (
+
           <div>
 
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
@@ -981,11 +1130,10 @@ function ProjectDetails() {
 
                 <p className="text-sm text-slate-500 mt-1">
                   Manage tasks assigned to
-                  this project. Role
-                  detected:{" "}
+                  this project. Role detected:{" "}
                   <span className="font-semibold capitalize">
-                    {userRole ||
-                      "Member"}
+                    {projectUserRole ||
+                      "member"}
                   </span>
                 </p>
 
@@ -1034,6 +1182,14 @@ function ProjectDetails() {
               </div>
 
             </div>
+
+            {/* TASK ERROR */}
+
+            {taskError && (
+              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {taskError}
+              </div>
+            )}
 
             {/* STATUS CARDS */}
 
@@ -1097,7 +1253,9 @@ function ProjectDetails() {
 
             </div>
 
-            {/* LIST VIEW */}
+            {/* =================================================
+                LIST VIEW
+            ================================================= */}
 
             {taskViewMode ===
             "list" ? (
@@ -1143,7 +1301,9 @@ function ProjectDetails() {
                   <div className="divide-y divide-slate-100">
 
                     {filteredTasks.map(
-                      (task) => (
+                      (task) => {
+                        const showActions = canEditTask(task) || canDeleteTask(task);
+                        return (
 
                         <div
                           key={task.id}
@@ -1154,7 +1314,7 @@ function ProjectDetails() {
 
                             <div
                               className={
-                                isProjectManager
+                                showActions
                                   ? "md:col-span-4"
                                   : "md:col-span-6"
                               }
@@ -1167,13 +1327,12 @@ function ProjectDetails() {
                                     task.title}
                                 </p>
 
-                                {/* =================================================
-                                    ATTACHMENT ICON
-                                ================================================= */}
+                                {/* ATTACHMENT */}
 
                                 {getAttachmentUrl(
                                   task
                                 ) && (
+
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1188,16 +1347,19 @@ function ProjectDetails() {
                                       size={14}
                                     />
                                   </button>
+
                                 )}
 
                               </div>
 
                               {task.description && (
+
                                 <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
                                   {
                                     task.description
                                   }
                                 </p>
+
                               )}
 
                             </div>
@@ -1246,45 +1408,54 @@ function ProjectDetails() {
 
                             </div>
 
-                            {isProjectManager && (
+                            {/* DYNAMIC ACTIONS PER TASK PERMISSION */}
+
+                            {showActions && (
+
                               <div className="md:col-span-2 flex items-center justify-end gap-2">
 
-                                <button
-                                  onClick={() =>
-                                    handleOpenEditModal(
-                                      task
-                                    )
-                                  }
-                                  className="w-9 h-9 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors"
-                                  title="Edit task"
-                                >
-                                  <Pencil
-                                    size={15}
-                                  />
-                                </button>
+                                {canEditTask(task) && (
+                                  <button
+                                    onClick={() =>
+                                      handleOpenEditModal(
+                                        task
+                                      )
+                                    }
+                                    className="w-9 h-9 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors"
+                                    title="Edit task status or details"
+                                  >
+                                    <Pencil
+                                      size={15}
+                                    />
+                                  </button>
+                                )}
 
-                                <button
-                                  onClick={() =>
-                                    openDeleteTaskModal(
-                                      task
-                                    )
-                                  }
-                                  className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center transition-colors"
-                                  title="Delete task"
-                                >
-                                  <Trash2
-                                    size={15}
-                                  />
-                                </button>
+                                {canDeleteTask(task) && (
+                                  <button
+                                    onClick={() =>
+                                      openDeleteTaskModal(
+                                        task
+                                      )
+                                    }
+                                    className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center transition-colors"
+                                    title="Delete task"
+                                  >
+                                    <Trash2
+                                      size={15}
+                                    />
+                                  </button>
+                                )}
 
                               </div>
+
                             )}
 
                           </div>
 
                         </div>
 
-                      )
+                      );
+                      }
                     )}
 
                   </div>
@@ -1295,7 +1466,9 @@ function ProjectDetails() {
 
             ) : (
 
-              /* BOARD VIEW */
+              /* =================================================
+                  BOARD VIEW
+              ================================================= */
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
@@ -1345,7 +1518,9 @@ function ProjectDetails() {
                               statusKey
                           )
                           .map(
-                            (task) => (
+                            (task) => {
+                              const showBoardActions = canEditTask(task) || canDeleteTask(task);
+                              return (
 
                               <div
                                 key={task.id}
@@ -1363,13 +1538,12 @@ function ProjectDetails() {
                                           task.title}
                                       </p>
 
-                                      {/* =================================================
-                                          ATTACHMENT ICON - BOARD VIEW
-                                      ================================================= */}
+                                      {/* ATTACHMENT */}
 
                                       {getAttachmentUrl(
                                         task
                                       ) && (
+
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -1384,16 +1558,19 @@ function ProjectDetails() {
                                             size={13}
                                           />
                                         </button>
+
                                       )}
 
                                     </div>
 
                                     {task.description && (
+
                                       <p className="text-xs text-slate-400 mt-1 line-clamp-2">
                                         {
                                           task.description
                                         }
                                       </p>
+
                                     )}
 
                                     <p className="text-xs text-indigo-600 font-medium mt-3">
@@ -1404,45 +1581,54 @@ function ProjectDetails() {
 
                                   </div>
 
-                                  {isProjectManager && (
+                                  {/* DYNAMIC ACTIONS PER TASK PERMISSION */}
+
+                                  {showBoardActions && (
+
                                     <div className="flex items-center gap-1 shrink-0">
 
-                                      <button
-                                        onClick={() =>
-                                          handleOpenEditModal(
-                                            task
-                                          )
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center"
-                                        title="Edit"
-                                      >
-                                        <Pencil
-                                          size={13}
-                                        />
-                                      </button>
+                                      {canEditTask(task) && (
+                                        <button
+                                          onClick={() =>
+                                            handleOpenEditModal(
+                                              task
+                                            )
+                                          }
+                                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center"
+                                          title="Edit"
+                                        >
+                                          <Pencil
+                                            size={13}
+                                          />
+                                        </button>
+                                      )}
 
-                                      <button
-                                        onClick={() =>
-                                          openDeleteTaskModal(
-                                            task
-                                          )
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
-                                        title="Delete"
-                                      >
-                                        <Trash2
-                                          size={13}
-                                        />
-                                      </button>
+                                      {canDeleteTask(task) && (
+                                        <button
+                                          onClick={() =>
+                                            openDeleteTaskModal(
+                                              task
+                                            )
+                                          }
+                                          className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
+                                          title="Delete"
+                                        >
+                                          <Trash2
+                                            size={13}
+                                          />
+                                        </button>
+                                      )}
 
                                     </div>
+
                                   )}
 
                                 </div>
 
                               </div>
 
-                            )
+                            );
+                            }
                           )}
 
                       </div>
@@ -1457,12 +1643,19 @@ function ProjectDetails() {
             )}
 
           </div>
+
         )}
 
+        {/* =====================================================
+            AI ASSISTANT
+        ===================================================== */}
+
         {activeTab === "assistant" && (
+
           <div>
             <AIAssistant projectId={id} />
           </div>
+
         )}
 
       </main>
@@ -1483,13 +1676,11 @@ function ProjectDetails() {
                 <div className="flex items-center gap-2">
 
                   <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-
                     <Pencil size={16} />
-
                   </div>
 
                   <h3 className="text-base font-bold text-slate-900">
-                    Edit Task
+                    {isProjectOwner || isTaskCreator(editingTask) ? "Edit Task Details" : "Update Task Status"}
                   </h3>
 
                 </div>
@@ -1514,48 +1705,56 @@ function ProjectDetails() {
                 className="p-6 space-y-4"
               >
 
-                <div>
+                {(isProjectOwner || isTaskCreator(editingTask)) ? (
+                  <>
+                    <div>
 
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Task Title
-                  </label>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Task Title
+                      </label>
 
-                  <input
-                    type="text"
-                    value={
-                      editFormName
-                    }
-                    onChange={(e) =>
-                      setEditFormName(
-                        e.target.value
-                      )
-                    }
-                    required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
-                  />
+                      <input
+                        type="text"
+                        value={
+                          editFormName
+                        }
+                        onChange={(e) =>
+                          setEditFormName(
+                            e.target.value
+                          )
+                        }
+                        required
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
+                      />
 
-                </div>
+                    </div>
 
-                <div>
+                    <div>
 
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Description
-                  </label>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Description
+                      </label>
 
-                  <textarea
-                    rows={3}
-                    value={
-                      editFormDesc
-                    }
-                    onChange={(e) =>
-                      setEditFormDesc(
-                        e.target.value
-                      )
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600 resize-none"
-                  />
+                      <textarea
+                        rows={3}
+                        value={
+                          editFormDesc
+                        }
+                        onChange={(e) =>
+                          setEditFormDesc(
+                            e.target.value
+                          )
+                        }
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600 resize-none"
+                      />
 
-                </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs">
+                    This task was assigned to you by a manager. You can update its status (e.g., from To Do to Completed), but other details cannot be modified.
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -1593,26 +1792,28 @@ function ProjectDetails() {
 
                   </div>
 
-                  <div>
+                  {(isProjectOwner || isTaskCreator(editingTask)) && (
+                    <div>
 
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                      Due Date
-                    </label>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Due Date
+                      </label>
 
-                    <input
-                      type="date"
-                      value={
-                        editFormDueDate
-                      }
-                      onChange={(e) =>
-                        setEditFormDueDate(
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
-                    />
+                      <input
+                        type="date"
+                        value={
+                          editFormDueDate
+                        }
+                        onChange={(e) =>
+                          setEditFormDueDate(
+                            e.target.value
+                          )
+                        }
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
+                      />
 
-                  </div>
+                    </div>
+                  )}
 
                 </div>
 
@@ -1653,6 +1854,7 @@ function ProjectDetails() {
             </div>
 
           </div>
+
         )}
 
       {/* =====================================================
@@ -1667,9 +1869,7 @@ function ProjectDetails() {
             <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6">
 
               <div className="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mb-4">
-
                 <Trash2 size={20} />
-
               </div>
 
               <h3 className="text-base font-bold text-slate-900">
@@ -1716,10 +1916,12 @@ function ProjectDetails() {
                   }
                   className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm disabled:opacity-50"
                 >
+
                   {deletingTaskId ===
                   taskToDelete.id
                     ? "Deleting..."
                     : "Delete Task"}
+
                 </button>
 
               </div>
@@ -1727,6 +1929,7 @@ function ProjectDetails() {
             </div>
 
           </div>
+
         )}
 
       {/* =====================================================
@@ -1771,9 +1974,11 @@ function ProjectDetails() {
                 }
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm disabled:opacity-50 transition-colors"
               >
+
                 {deletingAllTasks
                   ? "Deleting..."
                   : "Yes"}
+
               </button>
 
             </div>
@@ -1789,4 +1994,3 @@ function ProjectDetails() {
 }
 
 export default ProjectDetails;
-
