@@ -141,6 +141,22 @@ function ProjectDetails() {
       .trim()
       .toLowerCase();
 
+  // AI Assistant is available ONLY to Project Managers.
+  // Do not use project ownership here because a Developer may own
+  // a project they created themselves.
+  const currentUserRole = String(
+    currentUser?.role ||
+      currentUser?.user_role ||
+      currentUser?.role_name ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const isManager =
+    currentUserRole === "project manager" ||
+    currentUserRole === "manager";
+
   // Helper to check if the current logged-in user created the task
   const isTaskCreator = (task) => {
     if (!currentUser) return false;
@@ -915,16 +931,25 @@ function ProjectDetails() {
   // =========================================================
 
   const handleTabClick = (tab) => {
-    if (tab === "transcription") {
-      navigate(
-        `/projects/${id}/transcription`
-      );
+    // AI Assistant is a manager-only feature.
+    if (tab === "assistant" && !isManager) {
+      return;
+    }
 
+    if (tab === "transcription") {
+      navigate(`/projects/${id}/transcription`);
       return;
     }
 
     setActiveTab(tab);
   };
+
+  // A non-manager must never remain on the manager-only Assistant tab.
+  useEffect(() => {
+    if (activeTab === "assistant" && !isManager) {
+      setActiveTab("tasks");
+    }
+  }, [activeTab, isManager]);
 
   // =========================================================
   // LOADING
@@ -994,9 +1019,10 @@ function ProjectDetails() {
 
               <button
                 onClick={() =>
-                  navigate(-1)
+                  navigate("/manager-dashboard", { replace: true })
                 }
                 className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-500 transition-colors"
+                title="Back to Dashboard"
               >
                 <ArrowLeft size={17} />
               </button>
@@ -1079,7 +1105,7 @@ function ProjectDetails() {
               "meetings",
               "transcription",
               "insights",
-              "assistant",
+              ...(isManager ? ["assistant"] : []),
             ].map((tab) => (
 
               <button
@@ -1650,7 +1676,7 @@ function ProjectDetails() {
             AI ASSISTANT
         ===================================================== */}
 
-        {activeTab === "assistant" && (
+        {activeTab === "assistant" && isManager && (
 
           <div>
             <AIAssistant projectId={id} />
