@@ -1,8 +1,7 @@
-
 import json
 import os
 import re
-from services.email_service import create_email_draft
+
 from dotenv import load_dotenv
 from google import genai
 from groq import Groq
@@ -14,17 +13,11 @@ from services.backend_service import (
 )
 
 
-# ============================================================
-# LOAD ENVIRONMENT VARIABLES
-# ============================================================
-
+# Load environment variables
 load_dotenv()
 
 
-# ============================================================
-# API CONFIGURATION
-# ============================================================
-
+# Configure API keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 GROQ_MODEL = os.getenv(
@@ -40,10 +33,7 @@ GEMINI_MODEL = os.getenv(
 )
 
 
-# ============================================================
-# VALIDATE API KEYS
-# ============================================================
-
+# Validate AI configuration
 if not GROQ_API_KEY and not GEMINI_API_KEY:
     raise RuntimeError(
         "Both GROQ_API_KEY and GEMINI_API_KEY are missing. "
@@ -51,10 +41,7 @@ if not GROQ_API_KEY and not GEMINI_API_KEY:
     )
 
 
-# ============================================================
-# GROQ CLIENT
-# ============================================================
-
+# Initialize Groq client
 groq_client = None
 
 if GROQ_API_KEY:
@@ -63,10 +50,7 @@ if GROQ_API_KEY:
     )
 
 
-# ============================================================
-# GEMINI CLIENT
-# ============================================================
-
+# Initialize Gemini client
 gemini_client = None
 
 if GEMINI_API_KEY:
@@ -75,10 +59,7 @@ if GEMINI_API_KEY:
     )
 
 
-# ============================================================
-# SYSTEM PROMPT
-# ============================================================
-
+# Define the main assistant instructions
 SYSTEM_PROMPT = """
 You are the AI Assistant for a project management
 application called CollabFlow.
@@ -91,9 +72,7 @@ project, its tasks, and its team members.
 
 You MUST NEVER answer using information from another project.
 
-============================================================
 CURRENT PROJECT RULE
-============================================================
 
 The user is currently inside ONE specific project.
 
@@ -115,9 +94,7 @@ IGNORE it.
 
 The current project is the only project that matters.
 
-============================================================
 PROJECT QUESTIONS
-============================================================
 
 If the user asks:
 
@@ -145,9 +122,7 @@ Team Members:
 
 Do NOT mention any other project.
 
-============================================================
 PROJECT STATUS
-============================================================
 
 When showing project information, clearly identify:
 
@@ -161,9 +136,7 @@ Only show fields that actually exist.
 
 Never invent information.
 
-============================================================
 TASK QUESTIONS
-============================================================
 
 Tasks supplied to you belong to the current project.
 
@@ -191,9 +164,7 @@ If the user asks:
 
 Count only tasks belonging to the current project.
 
-============================================================
 TEAM MEMBER QUESTIONS
-============================================================
 
 When the user asks about a team member, search the supplied
 team information.
@@ -214,9 +185,7 @@ to match their tasks.
 
 Never expose their internal ID.
 
-============================================================
 TASK ASSIGNMENT
-============================================================
 
 A task may contain:
 
@@ -229,24 +198,9 @@ The assigned_to field may contain a numeric user ID.
 
 The team information contains the corresponding member ID.
 
-Example:
-
-Task:
-
-assigned_to = 10
-
-Team member:
-
-id = 10
-name = Ahmed
-
-This means the task belongs to Ahmed.
-
 Never treat a numeric ID as a person's name.
 
-============================================================
 MEMBER TASK QUESTIONS
-============================================================
 
 If the user asks:
 
@@ -258,23 +212,7 @@ Then find tasks assigned to Ahmed.
 
 Return the task names and useful information.
 
-Example:
-
-Ahmed has 2 assigned tasks:
-
-Dashboard UI
-Status: In Progress
-Priority: High
-Due date: September 5
-
-Login API
-Status: Pending
-Priority: Medium
-Due date: September 8
-
-============================================================
 TASK COUNT
-============================================================
 
 If the user asks:
 
@@ -282,9 +220,7 @@ If the user asks:
 
 Count only Ahmed's tasks in the CURRENT PROJECT.
 
-============================================================
 NO TASKS
-============================================================
 
 Only say that a member has no tasks when:
 
@@ -297,9 +233,7 @@ If the member cannot be found, say:
 
 "I couldn't find that team member in the current project."
 
-============================================================
 WHO HAS MOST TASKS
-============================================================
 
 If the user asks:
 
@@ -307,11 +241,7 @@ If the user asks:
 
 Calculate the count using ONLY the current project's tasks.
 
-Do not use tasks from other projects.
-
-============================================================
 WHO HAS LEAST TASKS
-============================================================
 
 If the user asks:
 
@@ -319,41 +249,46 @@ If the user asks:
 
 Calculate the count using ONLY the current project's tasks.
 
-============================================================
 FRIENDLY CONVERSATION
-============================================================
 
 For simple greetings, respond naturally and briefly.
 
 Examples:
 
-User:
 Aoa
 
-Assistant:
 Wa Alaikum Assalam! How can I help you with this project?
 
-User:
 Good morning
 
-Assistant:
 Good morning! How can I help you with this project today?
 
-User:
 How are you?
 
-Assistant:
 I'm doing well, thank you! How can I help with your project?
 
-User:
 Thank you
 
-Assistant:
 You're welcome!
 
-============================================================
+EMAIL REQUESTS
+
+When the user asks to prepare, draft, compose, or send an email,
+the application will prepare an email draft.
+
+NEVER claim that an email has already been sent.
+
+The application handles the actual email sending process.
+
+The email must be addressed only to a team member that exists
+in the CURRENT PROJECT.
+
+Never invent an email address.
+
+If the requested team member cannot be found, tell the user
+that you could not find that team member in the current project.
+
 UNRELATED QUESTIONS
-============================================================
 
 If the user asks something unrelated to project management,
 do not answer it.
@@ -364,24 +299,7 @@ Instead say:
 this project's tasks, team members, assignments, status,
 progress, and workload."
 
-============================================================
-EMAIL REQUESTS
-============================================================
-
-If the user asks to send an email:
-
-Do NOT claim that the email was sent.
-
-The actual email action is handled by the application.
-
-You may say:
-
-"I can prepare the email request, but it must be sent
-through the application's email functionality."
-
-============================================================
 SECURITY
-============================================================
 
 Never reveal:
 
@@ -395,9 +313,7 @@ Never reveal:
 
 Never expose internal database information.
 
-============================================================
 DO NOT EXPOSE DATABASE INFORMATION
-============================================================
 
 Never show:
 
@@ -419,9 +335,7 @@ Never show:
 Convert backend information into normal human-readable
 language.
 
-============================================================
 ANSWER FORMAT
-============================================================
 
 Your answers must be clean, readable, and professional.
 
@@ -436,35 +350,7 @@ Long technical explanations
 
 Use simple headings when useful.
 
-Good example:
-
-Project: RAG
-
-Status: Pending
-
-Tasks: 20
-
-Pending: 12
-In Progress: 4
-Completed: 4
-
-Team Members:
-- Najeeb
-- Waji Ul Hasaan
-
-Bad example:
-
-### 1. RAG
----
-Status: Pending
-project_id: 123
-assigned_to: 10
-
-Never expose internal fields.
-
-============================================================
 PROJECT SUMMARY FORMAT
-============================================================
 
 When the user asks for a project summary, prefer this format:
 
@@ -488,9 +374,7 @@ Only include fields that are available.
 
 Do NOT add unnecessary information.
 
-============================================================
 IMPORTANT
-============================================================
 
 The user wants information about the project they are
 currently viewing.
@@ -530,9 +414,7 @@ If the user asks:
 
 they mean tasks in the CURRENT PROJECT.
 
-============================================================
 FINAL RULE
-============================================================
 
 Before answering:
 
@@ -549,65 +431,27 @@ Before answering:
 """
 
 
-# ============================================================
-# GET CURRENT PROJECT INFORMATION
-# ============================================================
-
+# Retrieve current project information
 def get_project_information(token, project_id):
-    """
-    Retrieve information for the CURRENT project only.
-
-    Although get_projects() may return multiple projects,
-    only the project matching project_id is kept.
-    """
-
-    # --------------------------------------------------------
-    # GET ALL PROJECTS
-    # --------------------------------------------------------
-
     all_projects = get_projects(token)
 
-    # --------------------------------------------------------
-    # NORMALIZE PROJECT RESPONSE
-    # --------------------------------------------------------
-
     projects = normalize_projects(all_projects)
-
-    # --------------------------------------------------------
-    # FIND CURRENT PROJECT
-    # --------------------------------------------------------
 
     current_project = find_current_project(
         projects,
         project_id
     )
 
-    # --------------------------------------------------------
-    # GET CURRENT PROJECT TASKS
-    # --------------------------------------------------------
-
     tasks = get_project_tasks(
         project_id,
         token
     )
 
-    # --------------------------------------------------------
-    # GET TEAM
-    # --------------------------------------------------------
-
     team = get_team_members(
         token
     )
 
-    # --------------------------------------------------------
-    # FILTER TEAM FOR CURRENT PROJECT
-    # --------------------------------------------------------
-
     team = normalize_team(team)
-
-    # --------------------------------------------------------
-    # RETURN ONLY CURRENT PROJECT INFORMATION
-    # --------------------------------------------------------
 
     return {
         "project": current_project,
@@ -616,26 +460,17 @@ def get_project_information(token, project_id):
     }
 
 
-# ============================================================
-# NORMALIZE PROJECT RESPONSE
-# ============================================================
-
+# Normalize project response
 def normalize_projects(projects):
-    """
-    Extract project list from backend response.
-    """
-
     if isinstance(projects, list):
         return projects
 
     if isinstance(projects, dict):
-
         for key in (
             "projects",
             "data",
             "results"
         ):
-
             value = projects.get(key)
 
             if isinstance(value, list):
@@ -644,22 +479,14 @@ def normalize_projects(projects):
     return []
 
 
-# ============================================================
-# FIND CURRENT PROJECT
-# ============================================================
-
+# Find the current project
 def find_current_project(
     projects,
     project_id
 ):
-    """
-    Find the project matching the active project ID.
-    """
-
     project_id = str(project_id)
 
     for project in projects:
-
         if not isinstance(project, dict):
             continue
 
@@ -670,13 +497,8 @@ def find_current_project(
         )
 
         if current_id is not None:
-
             if str(current_id) == project_id:
                 return project
-
-    # If project information is unavailable,
-    # return a minimal object rather than exposing
-    # all projects to the model.
 
     return {
         "id": project_id,
@@ -684,26 +506,17 @@ def find_current_project(
     }
 
 
-# ============================================================
-# NORMALIZE TASKS
-# ============================================================
-
+# Normalize task response
 def normalize_tasks(tasks):
-    """
-    Extract the actual task list.
-    """
-
     if isinstance(tasks, list):
         return tasks
 
     if isinstance(tasks, dict):
-
         for key in (
             "tasks",
             "data",
             "results"
         ):
-
             value = tasks.get(key)
 
             if isinstance(value, list):
@@ -712,20 +525,12 @@ def normalize_tasks(tasks):
     return []
 
 
-# ============================================================
-# NORMALIZE TEAM
-# ============================================================
-
+# Normalize team response
 def normalize_team(team):
-    """
-    Extract the actual team member list.
-    """
-
     if isinstance(team, list):
         return team
 
     if isinstance(team, dict):
-
         for key in (
             "team",
             "members",
@@ -733,7 +538,6 @@ def normalize_team(team):
             "data",
             "results"
         ):
-
             value = team.get(key)
 
             if isinstance(value, list):
@@ -742,17 +546,10 @@ def normalize_team(team):
     return []
 
 
-# ============================================================
-# ENRICH TASK ASSIGNMENTS
-# ============================================================
-
+# Enrich tasks with assigned member information
 def enrich_task_assignments(
     project_information
 ):
-    """
-    Resolve task assignment IDs using team member data.
-    """
-
     tasks = normalize_tasks(
         project_information.get(
             "tasks",
@@ -767,14 +564,9 @@ def enrich_task_assignments(
         )
     )
 
-    # --------------------------------------------------------
-    # BUILD TEAM LOOKUP
-    # --------------------------------------------------------
-
     team_by_id = {}
 
     for member in team:
-
         if not isinstance(member, dict):
             continue
 
@@ -789,14 +581,9 @@ def enrich_task_assignments(
 
         team_by_id[str(member_id)] = member
 
-    # --------------------------------------------------------
-    # RESOLVE ASSIGNMENTS
-    # --------------------------------------------------------
-
     enriched_tasks = []
 
     for task in tasks:
-
         if not isinstance(task, dict):
             continue
 
@@ -809,13 +596,11 @@ def enrich_task_assignments(
         )
 
         if assigned_id is not None:
-
             member = team_by_id.get(
                 str(assigned_id)
             )
 
             if member:
-
                 member_name = (
                     member.get("name")
                     or member.get("full_name")
@@ -830,8 +615,11 @@ def enrich_task_assignments(
                     "resolved_assigned_to_name"
                 ] = member_name
 
-            else:
+                enriched_task[
+                    "resolved_assigned_to_email"
+                ] = member.get("email")
 
+            else:
                 enriched_task[
                     "resolved_assigned_user_id"
                 ] = assigned_id
@@ -840,14 +628,21 @@ def enrich_task_assignments(
                     "resolved_assigned_to_name"
                 ] = None
 
-        else:
+                enriched_task[
+                    "resolved_assigned_to_email"
+                ] = None
 
+        else:
             enriched_task[
                 "resolved_assigned_user_id"
             ] = None
 
             enriched_task[
                 "resolved_assigned_to_name"
+            ] = None
+
+            enriched_task[
+                "resolved_assigned_to_email"
             ] = None
 
         enriched_tasks.append(
@@ -861,20 +656,10 @@ def enrich_task_assignments(
     return project_information
 
 
-# ============================================================
-# BUILD PROJECT CONTEXT
-# ============================================================
-
+# Build project context for AI
 def build_project_context(
     project_information
 ):
-    """
-    Convert current project information into JSON.
-
-    IMPORTANT:
-    Only the CURRENT project is passed.
-    """
-
     project_information = (
         enrich_task_assignments(
             project_information
@@ -888,18 +673,11 @@ def build_project_context(
     )
 
 
-# ============================================================
-# LOCAL MEMBER SEARCH
-# ============================================================
-
+# Find matching team members
 def find_matching_members(
     project_information,
     question
 ):
-    """
-    Find team members by name or email.
-    """
-
     team = normalize_team(
         project_information.get(
             "team",
@@ -918,7 +696,6 @@ def find_matching_members(
     matches = []
 
     for member in team:
-
         if not isinstance(member, dict):
             continue
 
@@ -946,10 +723,6 @@ def find_matching_members(
         name_lower = name.lower()
         email_lower = email.lower()
 
-        # ----------------------------------------------------
-        # EMAIL MATCH
-        # ----------------------------------------------------
-
         if (
             email_lower
             and email_lower in question_lower
@@ -957,20 +730,12 @@ def find_matching_members(
             matches.append(member)
             continue
 
-        # ----------------------------------------------------
-        # FULL NAME MATCH
-        # ----------------------------------------------------
-
         if (
             name_lower
             and name_lower in question_lower
         ):
             matches.append(member)
             continue
-
-        # ----------------------------------------------------
-        # FIRST/LAST NAME MATCH
-        # ----------------------------------------------------
 
         name_parts = [
             part
@@ -987,14 +752,9 @@ def find_matching_members(
         ):
             matches.append(member)
 
-    # --------------------------------------------------------
-    # REMOVE DUPLICATES
-    # --------------------------------------------------------
-
     unique_members = {}
 
     for member in matches:
-
         member_id = (
             member.get("id")
             or member.get("user_id")
@@ -1002,7 +762,6 @@ def find_matching_members(
         )
 
         if member_id is not None:
-
             unique_members[
                 str(member_id)
             ] = member
@@ -1012,18 +771,11 @@ def find_matching_members(
     )
 
 
-# ============================================================
-# BUILD MEMBER CONTEXT
-# ============================================================
-
+# Build member-specific task context
 def build_member_context(
     project_information,
     question
 ):
-    """
-    Calculate member-specific task information locally.
-    """
-
     members = find_matching_members(
         project_information,
         question
@@ -1042,7 +794,6 @@ def build_member_context(
     sections = []
 
     for member in members:
-
         member_id = (
             member.get("id")
             or member.get("user_id")
@@ -1059,7 +810,6 @@ def build_member_context(
         matching_tasks = []
 
         for task in tasks:
-
             assigned_id = (
                 task.get(
                     "resolved_assigned_user_id"
@@ -1082,7 +832,6 @@ def build_member_context(
                 and str(assigned_id)
                 == str(member_id)
             ):
-
                 matching_tasks.append(
                     task
                 )
@@ -1104,20 +853,11 @@ def build_member_context(
     )
 
 
-# ============================================================
-# BUILD USER PROMPT
-# ============================================================
-
+# Build the normal AI prompt
 def build_user_prompt(
     project_information,
     question
 ):
-    """
-    Build the prompt for the AI model.
-
-    Only the CURRENT PROJECT is included.
-    """
-
     project_context = (
         build_project_context(
             project_information
@@ -1134,7 +874,6 @@ def build_user_prompt(
     member_section = ""
 
     if member_context:
-
         member_section = f"""
 
 MATCHED TEAM MEMBER INFORMATION:
@@ -1197,7 +936,6 @@ Do not show:
 - user_id
 - assigned_to
 - assigned_user_id
-- emails unless explicitly requested
 - database columns
 - SQL
 - JSON
@@ -1210,47 +948,489 @@ Do not use horizontal separators such as ---.
 
 Use simple readable labels.
 
-For example:
-
-Project: RAG
-
-Status: Pending
-
-Tasks: 20
-
-Pending: 12
-In Progress: 4
-Completed: 4
-
-Team Members:
-- Najeeb
-- Waji Ul Hasaan
-
 Answer only what the user asked.
 
 Never invent information.
 """
 
 
-# ============================================================
-# CLEAN AI RESPONSE
-# ============================================================
+# Detect whether the user requested an email
+def is_email_request(question):
+    email_patterns = [
+        r"\bemail\b",
+        r"\be-mail\b",
+        r"\bsend\s+an?\s+email\b",
+        r"\bsend\s+email\b",
+        r"\bdraft\s+an?\s+email\b",
+        r"\bwrite\s+an?\s+email\b",
+        r"\bcompose\s+an?\s+email\b",
+        r"\bprepare\s+an?\s+email\b",
+        r"\bnotify\b.*\bemail\b",
+    ]
 
+    question_lower = question.lower()
+
+    return any(
+        re.search(
+            pattern,
+            question_lower
+        )
+        for pattern in email_patterns
+    )
+
+
+# Create the email generation prompt
+def build_email_prompt(
+    project_information,
+    question,
+    member
+):
+    member_name = (
+        member.get("name")
+        or member.get("full_name")
+        or member.get("username")
+        or "Team Member"
+    )
+
+    member_email = (
+        member.get("email")
+        or ""
+    )
+
+    project = project_information.get(
+        "project",
+        {}
+    )
+
+    project_name = (
+        project.get("name")
+        or project.get("title")
+        or "Current Project"
+    )
+
+    return f"""
+You are preparing an email for the CollabFlow project
+management application.
+
+The user wants to prepare an email for a team member.
+
+CURRENT PROJECT:
+{project_name}
+
+RECIPIENT NAME:
+{member_name}
+
+RECIPIENT EMAIL:
+{member_email}
+
+USER REQUEST:
+{question}
+
+Create a professional email based on the user's request.
+
+Rules:
+
+1. The recipient must be the provided team member.
+2. Never change the recipient email.
+3. Never invent an email address.
+4. Create a clear and professional subject.
+5. Create a concise email body.
+6. Do not claim that the email was sent.
+7. Do not mention internal IDs.
+8. Do not mention database information.
+9. Do not add information that was not requested.
+10. Return ONLY valid JSON.
+
+The JSON must have exactly this structure:
+
+{{
+  "recipientName": "{member_name}",
+  "recipientEmail": "{member_email}",
+  "subject": "Email subject",
+  "body": "Email body"
+}}
+"""
+
+
+# Extract JSON from an AI response
+def parse_email_response(response_text):
+    if not response_text:
+        raise ValueError(
+            "AI returned an empty email response."
+        )
+
+    text = response_text.strip()
+
+    text = re.sub(
+        r"^```json\s*",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r"^```\s*",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"\s*```$",
+        "",
+        text
+    )
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(
+            r"\{.*\}",
+            text,
+            flags=re.DOTALL
+        )
+
+        if not match:
+            raise ValueError(
+                "AI did not return valid email JSON."
+            )
+
+        try:
+            data = json.loads(
+                match.group(0)
+            )
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "AI returned invalid email JSON."
+            ) from error
+
+    if not isinstance(data, dict):
+        raise ValueError(
+            "Email response must be a JSON object."
+        )
+
+    recipient_name = str(
+        data.get("recipientName")
+        or ""
+    ).strip()
+
+    recipient_email = str(
+        data.get("recipientEmail")
+        or ""
+    ).strip()
+
+    subject = str(
+        data.get("subject")
+        or ""
+    ).strip()
+
+    body = str(
+        data.get("body")
+        or ""
+    ).strip()
+
+    if not recipient_name:
+        raise ValueError(
+            "Email recipient name is missing."
+        )
+
+    if not recipient_email:
+        raise ValueError(
+            "Email recipient email is missing."
+        )
+
+    if not subject:
+        raise ValueError(
+            "Email subject is missing."
+        )
+
+    if not body:
+        raise ValueError(
+            "Email body is missing."
+        )
+
+    return {
+        "recipientName": recipient_name,
+        "recipientEmail": recipient_email,
+        "subject": subject,
+        "body": body
+    }
+
+
+# Generate an email draft using Groq
+def generate_email_with_groq(
+    email_prompt
+):
+    if not groq_client:
+        raise RuntimeError(
+            "Groq client is not configured."
+        )
+
+    print(
+        f"Attempting Groq email generation: {GROQ_MODEL}"
+    )
+
+    response = (
+        groq_client
+        .chat
+        .completions
+        .create(
+            model=GROQ_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate professional email drafts. "
+                        "Return only valid JSON."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": email_prompt
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1000
+        )
+    )
+
+    answer = (
+        response
+        .choices[0]
+        .message
+        .content
+    )
+
+    if not answer:
+        raise RuntimeError(
+            "Groq returned an empty email response."
+        )
+
+    return parse_email_response(
+        answer
+    )
+
+
+# Generate an email draft using Gemini
+def generate_email_with_gemini(
+    email_prompt
+):
+    if not gemini_client:
+        raise RuntimeError(
+            "Gemini client is not configured."
+        )
+
+    print(
+        f"Attempting Gemini email generation: {GEMINI_MODEL}"
+    )
+
+    combined_prompt = f"""
+You generate professional email drafts.
+
+Return ONLY valid JSON.
+
+{email_prompt}
+"""
+
+    response = (
+        gemini_client
+        .models
+        .generate_content(
+            model=GEMINI_MODEL,
+            contents=combined_prompt
+        )
+    )
+
+    answer = getattr(
+        response,
+        "text",
+        None
+    )
+
+    if not answer:
+        raise RuntimeError(
+            "Gemini returned an empty email response."
+        )
+
+    return parse_email_response(
+        answer
+    )
+
+
+# Generate an email draft
+def generate_email_draft(
+    project_information,
+    question
+):
+    members = find_matching_members(
+        project_information,
+        question
+    )
+
+    if not members:
+        return {
+            "success": False,
+            "email": None,
+            "answer": (
+                "I couldn't find that team member "
+                "in the current project."
+            )
+        }
+
+    if len(members) > 1:
+        member_names = []
+
+        for member in members:
+            name = (
+                member.get("name")
+                or member.get("full_name")
+                or member.get("username")
+            )
+
+            if name:
+                member_names.append(
+                    str(name)
+                )
+
+        return {
+            "success": False,
+            "email": None,
+            "answer": (
+                "I found multiple team members matching "
+                f"your request: {', '.join(member_names)}. "
+                "Please specify the member's full name."
+            )
+        }
+
+    member = members[0]
+
+    recipient_email = str(
+        member.get("email")
+        or ""
+    ).strip()
+
+    if not recipient_email:
+        return {
+            "success": False,
+            "email": None,
+            "answer": (
+                "The team member was found, but "
+                "their email address is not available."
+            )
+        }
+
+    email_prompt = build_email_prompt(
+        project_information,
+        question,
+        member
+    )
+
+    groq_error = None
+
+    if groq_client:
+        try:
+            email = generate_email_with_groq(
+                email_prompt
+            )
+
+            email["recipientEmail"] = (
+                recipient_email
+            )
+
+            email["recipientName"] = (
+                member.get("name")
+                or member.get("full_name")
+                or member.get("username")
+                or email["recipientName"]
+            )
+
+            return {
+                "success": True,
+                "email": email,
+                "answer": (
+                    f"I prepared an email draft for "
+                    f"{email['recipientName']}."
+                ),
+                "provider": "groq",
+                "model": GROQ_MODEL
+            }
+
+        except Exception as error:
+            groq_error = error
+
+            print(
+                "Groq email generation failed:",
+                type(error).__name__,
+                str(error)
+            )
+
+    if gemini_client:
+        try:
+            email = generate_email_with_gemini(
+                email_prompt
+            )
+
+            email["recipientEmail"] = (
+                recipient_email
+            )
+
+            email["recipientName"] = (
+                member.get("name")
+                or member.get("full_name")
+                or member.get("username")
+                or email["recipientName"]
+            )
+
+            return {
+                "success": True,
+                "email": email,
+                "answer": (
+                    f"I prepared an email draft for "
+                    f"{email['recipientName']}."
+                ),
+                "provider": "gemini",
+                "model": GEMINI_MODEL
+            }
+
+        except Exception as error:
+            print(
+                "Gemini email generation failed:",
+                type(error).__name__,
+                str(error)
+            )
+
+    error_messages = []
+
+    if groq_error:
+        error_messages.append(
+            f"Groq: {type(groq_error).__name__}: "
+            f"{str(groq_error)}"
+        )
+
+    if not error_messages:
+        error_messages.append(
+            "No AI provider is configured."
+        )
+
+    return {
+        "success": False,
+        "email": None,
+        "answer": (
+            "I could not prepare the email draft."
+        ),
+        "error": " | ".join(
+            error_messages
+        )
+    }
+
+
+# Clean normal AI response
 def clean_ai_response(
     answer
 ):
-    """
-    Remove unnecessary formatting from the AI response.
-    """
-
     if not answer:
         return ""
 
     answer = answer.strip()
-
-    # --------------------------------------------------------
-    # Remove markdown heading symbols
-    # --------------------------------------------------------
 
     answer = re.sub(
         r"^\s*#{1,6}\s*",
@@ -1259,10 +1439,6 @@ def clean_ai_response(
         flags=re.MULTILINE
     )
 
-    # --------------------------------------------------------
-    # Remove horizontal separators
-    # --------------------------------------------------------
-
     answer = re.sub(
         r"^\s*[-*_]{3,}\s*$",
         "",
@@ -1270,19 +1446,11 @@ def clean_ai_response(
         flags=re.MULTILINE
     )
 
-    # --------------------------------------------------------
-    # Remove excessive blank lines
-    # --------------------------------------------------------
-
     answer = re.sub(
         r"\n{3,}",
         "\n\n",
         answer
     )
-
-    # --------------------------------------------------------
-    # Remove accidental code fences
-    # --------------------------------------------------------
 
     answer = answer.replace(
         "```json",
@@ -1297,17 +1465,10 @@ def clean_ai_response(
     return answer.strip()
 
 
-# ============================================================
-# CALL GROQ
-# ============================================================
-
+# Call Groq
 def call_groq(
     user_prompt
 ):
-    """
-    Primary AI provider.
-    """
-
     if not groq_client:
         raise RuntimeError(
             "Groq client is not configured."
@@ -1355,17 +1516,10 @@ def call_groq(
     )
 
 
-# ============================================================
-# CALL GEMINI
-# ============================================================
-
+# Call Gemini
 def call_gemini(
     user_prompt
 ):
-    """
-    Backup AI provider.
-    """
-
     if not gemini_client:
         raise RuntimeError(
             "Gemini client is not configured."
@@ -1408,41 +1562,12 @@ CURRENT REQUEST:
     )
 
 
-# ============================================================
-# ASK AI ASSISTANT
-# ============================================================
-
+# Run the AI assistant
 def ask_ai_assistant(
     token,
     project_id,
     question
 ):
-    """
-    Main AI assistant pipeline.
-
-    Flow:
-
-    User question
-          ↓
-    Get all projects
-          ↓
-    Select CURRENT project
-          ↓
-    Get CURRENT project tasks
-          ↓
-    Get team information
-          ↓
-    Build CURRENT PROJECT context
-          ↓
-    Groq
-          ↓
-    Gemini fallback
-    """
-
-    # ========================================================
-    # VALIDATE QUESTION
-    # ========================================================
-
     if question is None:
         raise ValueError(
             "Question is required."
@@ -1456,10 +1581,6 @@ def ask_ai_assistant(
         raise ValueError(
             "Question cannot be empty."
         )
-
-    # ========================================================
-    # VALIDATE PROJECT ID
-    # ========================================================
 
     if project_id is None:
         raise ValueError(
@@ -1475,12 +1596,7 @@ def ask_ai_assistant(
             "Project ID cannot be empty."
         )
 
-    # ========================================================
-    # GET CURRENT PROJECT DATA
-    # ========================================================
-
     try:
-
         project_information = (
             get_project_information(
                 token,
@@ -1489,7 +1605,6 @@ def ask_ai_assistant(
         )
 
     except Exception as error:
-
         print(
             "Backend data error:",
             type(error).__name__,
@@ -1501,9 +1616,33 @@ def ask_ai_assistant(
             f"Unable to retrieve project data: {str(error)}"
         )
 
-    # ========================================================
-    # BUILD USER PROMPT
-    # ========================================================
+    # Handle email requests separately
+    if is_email_request(question):
+        email_result = generate_email_draft(
+            project_information,
+            question
+        )
+
+        return {
+            "success": email_result.get(
+                "success",
+                False
+            ),
+            "answer": email_result.get(
+                "answer",
+                "I could not prepare the email draft."
+            ),
+            "email": email_result.get(
+                "email"
+            ),
+            "provider": email_result.get(
+                "provider"
+            ),
+            "model": email_result.get(
+                "model"
+            ),
+            "project_id": project_id
+        }
 
     user_prompt = (
         build_user_prompt(
@@ -1512,16 +1651,10 @@ def ask_ai_assistant(
         )
     )
 
-    # ========================================================
-    # TRY GROQ FIRST
-    # ========================================================
-
     groq_error = None
 
     if groq_client:
-
         try:
-
             answer = call_groq(
                 user_prompt
             )
@@ -1539,7 +1672,6 @@ def ask_ai_assistant(
             }
 
         except Exception as error:
-
             groq_error = error
 
             print(
@@ -1559,16 +1691,10 @@ def ask_ai_assistant(
                 "============================================================"
             )
 
-    # ========================================================
-    # TRY GEMINI BACKUP
-    # ========================================================
-
     gemini_error = None
 
     if gemini_client:
-
         try:
-
             answer = call_gemini(
                 user_prompt
             )
@@ -1586,7 +1712,6 @@ def ask_ai_assistant(
             }
 
         except Exception as error:
-
             gemini_error = error
 
             print(
@@ -1606,14 +1731,9 @@ def ask_ai_assistant(
                 "============================================================"
             )
 
-    # ========================================================
-    # BOTH PROVIDERS FAILED
-    # ========================================================
-
     error_messages = []
 
     if groq_error:
-
         error_messages.append(
             f"Groq: "
             f"{type(groq_error).__name__}: "
@@ -1621,7 +1741,6 @@ def ask_ai_assistant(
         )
 
     if gemini_error:
-
         error_messages.append(
             f"Gemini: "
             f"{type(gemini_error).__name__}: "
@@ -1629,7 +1748,6 @@ def ask_ai_assistant(
         )
 
     if not error_messages:
-
         error_messages.append(
             "No AI provider is configured."
         )
@@ -1657,4 +1775,3 @@ def ask_ai_assistant(
     raise RuntimeError(
         f"AI assistant failed: {final_error}"
     )
-

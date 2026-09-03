@@ -1,35 +1,12 @@
-from fastapi import (
-    FastAPI,
-    UploadFile,
-    File,
-    HTTPException,
-    Header
-)
 
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel
-
 import tempfile
 import os
 
-
-# ============================================================
-# AI SERVICES
-# ============================================================
-
-from services.meeting_pipeline import (
-    process_meeting
-)
-
-from services.assistant_service import (
-    ask_ai_assistant
-)
-
-
-# ============================================================
-# EMAIL SERVICE
-# ============================================================
+from services.meeting_pipeline import process_meeting
+from services.assistant_service import ask_ai_assistant
 
 from services.email_service import (
     create_email_draft,
@@ -39,182 +16,104 @@ from services.email_service import (
 )
 
 
-# ============================================================
-# FASTAPI APP
-# ============================================================
-
+# FastAPI application
 app = FastAPI(
     title="CollabFlow AI Service",
     version="1.0.0"
 )
 
 
-# ============================================================
-# CORS
-# ============================================================
-
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-
     allow_origins=[
         "http://localhost:5173"
     ],
-
     allow_credentials=True,
-
-    allow_methods=[
-        "*"
-    ],
-
-    allow_headers=[
-        "*"
-    ]
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 
-# ============================================================
-# ASSISTANT REQUEST MODEL
-# ============================================================
-
+# Assistant request model
 class AssistantRequest(BaseModel):
-
     project_id: str
-
     question: str
 
 
-# ============================================================
-# EMAIL DRAFT REQUEST MODEL
-# ============================================================
-
+# Email draft request model
 class EmailDraftRequest(BaseModel):
-
     recipient_name: str
-
     recipient_email: str
-
     subject: str
-
     body: str
 
 
-# ============================================================
-# EMAIL UPDATE REQUEST MODEL
-# ============================================================
-
+# Email update request model
 class EmailUpdateRequest(BaseModel):
-
     draft: dict
-
     recipient_name: str | None = None
-
     recipient_email: str | None = None
-
     subject: str | None = None
-
     body: str | None = None
 
 
-# ============================================================
-# EMAIL APPROVE REQUEST MODEL
-# ============================================================
-
+# Email approval request model
 class EmailApproveRequest(BaseModel):
-
     draft: dict
 
 
-# ============================================================
-# EMAIL SEND REQUEST MODEL
-# ============================================================
-
+# Email send request model
 class EmailSendRequest(BaseModel):
-
     draft: dict
 
 
-# ============================================================
-# ROOT
-# ============================================================
-
+# Root endpoint
 @app.get("/")
 def root():
-
     return {
         "success": True,
         "message": "AI service is running"
     }
 
 
-# ============================================================
-# AI PROJECT ASSISTANT
-# ============================================================
-
+# AI project assistant
 @app.post("/assistant")
 async def project_assistant(
     request: AssistantRequest,
     authorization: str | None = Header(default=None)
 ):
-
     try:
-
         print("\n==========================================")
         print("AI ASSISTANT REQUEST")
         print("==========================================")
 
-        print(
-            "Project ID:",
-            request.project_id
-        )
-
-        print(
-            "Question:",
-            request.question
-        )
-
-        # ====================================================
-        # VALIDATE PROJECT ID
-        # ====================================================
+        print("Project ID:", request.project_id)
+        print("Question:", request.question)
 
         if not request.project_id.strip():
-
             raise HTTPException(
                 status_code=400,
                 detail="Project ID is required."
             )
 
-        # ====================================================
-        # VALIDATE QUESTION
-        # ====================================================
-
         if not request.question.strip():
-
             raise HTTPException(
                 status_code=400,
                 detail="Question is required."
             )
 
-        # ====================================================
-        # CHECK AUTHORIZATION
-        # ====================================================
-
         if not authorization:
-
             raise HTTPException(
                 status_code=401,
                 detail="Authorization token is required."
             )
 
         if not authorization.startswith("Bearer "):
-
             raise HTTPException(
                 status_code=401,
                 detail="Invalid authorization header."
             )
-
-        # ====================================================
-        # EXTRACT TOKEN
-        # ====================================================
 
         token = authorization.replace(
             "Bearer ",
@@ -223,25 +122,16 @@ async def project_assistant(
         ).strip()
 
         if not token:
-
             raise HTTPException(
                 status_code=401,
                 detail="Invalid authentication token."
             )
-
-        # ====================================================
-        # RUN AI ASSISTANT
-        # ====================================================
 
         result = ask_ai_assistant(
             token=token,
             project_id=request.project_id,
             question=request.question
         )
-
-        # ====================================================
-        # PRINT RESPONSE
-        # ====================================================
 
         print("\n==========================================")
         print("AI ASSISTANT RESPONSE")
@@ -254,20 +144,17 @@ async def project_assistant(
             )
         )
 
-        print("==========================================")
+        if result.get("email"):
+            print("Email data generated by AI.")
 
-        # ====================================================
-        # RETURN RESPONSE
-        # ====================================================
+        print("==========================================")
 
         return result
 
     except HTTPException:
-
         raise
 
     except ValueError as error:
-
         print(
             "Assistant validation error:",
             str(error)
@@ -279,7 +166,6 @@ async def project_assistant(
         )
 
     except Exception as error:
-
         print("\n==========================================")
         print("AI ASSISTANT ERROR")
         print("==========================================")
@@ -298,17 +184,12 @@ async def project_assistant(
         )
 
 
-# ============================================================
-# CREATE EMAIL DRAFT
-# ============================================================
-
+# Create email draft
 @app.post("/email/draft")
 async def create_email_draft_endpoint(
     request: EmailDraftRequest
 ):
-
     try:
-
         print("\n==========================================")
         print("CREATING EMAIL DRAFT")
         print("==========================================")
@@ -323,18 +204,10 @@ async def create_email_draft_endpoint(
             request.subject
         )
 
-        # ====================================================
-        # CREATE DRAFT
-        # ====================================================
-
         draft = create_email_draft(
-
             recipient_name=request.recipient_name,
-
             recipient_email=request.recipient_email,
-
             subject=request.subject,
-
             body=request.body
         )
 
@@ -347,10 +220,6 @@ async def create_email_draft_endpoint(
             "Draft created successfully."
         )
 
-        # ====================================================
-        # RETURN DRAFT
-        # ====================================================
-
         return {
             "success": True,
             "message": "Email draft created successfully.",
@@ -358,7 +227,6 @@ async def create_email_draft_endpoint(
         }
 
     except ValueError as error:
-
         print(
             "Email draft validation error:",
             str(error)
@@ -370,7 +238,6 @@ async def create_email_draft_endpoint(
         )
 
     except Exception as error:
-
         print(
             "Email draft creation error:",
             str(error)
@@ -382,45 +249,27 @@ async def create_email_draft_endpoint(
         )
 
 
-# ============================================================
-# UPDATE EMAIL DRAFT
-# ============================================================
-
+# Update email draft
 @app.put("/email/draft")
 async def update_email_draft_endpoint(
     request: EmailUpdateRequest
 ):
-
     try:
-
         print("\n==========================================")
         print("UPDATING EMAIL DRAFT")
         print("==========================================")
 
-        # ====================================================
-        # UPDATE DRAFT
-        # ====================================================
-
         updated_draft = update_email_draft(
-
             draft=request.draft,
-
             recipient_name=request.recipient_name,
-
             recipient_email=request.recipient_email,
-
             subject=request.subject,
-
             body=request.body
         )
 
         print(
             "Draft updated successfully."
         )
-
-        # ====================================================
-        # RETURN UPDATED DRAFT
-        # ====================================================
 
         return {
             "success": True,
@@ -429,7 +278,6 @@ async def update_email_draft_endpoint(
         }
 
     except ValueError as error:
-
         print(
             "Email draft update validation error:",
             str(error)
@@ -441,7 +289,6 @@ async def update_email_draft_endpoint(
         )
 
     except Exception as error:
-
         print(
             "Email draft update error:",
             str(error)
@@ -453,24 +300,15 @@ async def update_email_draft_endpoint(
         )
 
 
-# ============================================================
-# APPROVE EMAIL DRAFT
-# ============================================================
-
+# Approve email draft
 @app.post("/email/draft/approve")
 async def approve_email_draft_endpoint(
     request: EmailApproveRequest
 ):
-
     try:
-
         print("\n==========================================")
         print("APPROVING EMAIL DRAFT")
         print("==========================================")
-
-        # ====================================================
-        # APPROVE DRAFT
-        # ====================================================
 
         approved_draft = approve_email_draft(
             request.draft
@@ -480,10 +318,6 @@ async def approve_email_draft_endpoint(
             "Draft approved successfully."
         )
 
-        # ====================================================
-        # RETURN APPROVED DRAFT
-        # ====================================================
-
         return {
             "success": True,
             "message": "Email draft approved successfully.",
@@ -491,7 +325,6 @@ async def approve_email_draft_endpoint(
         }
 
     except ValueError as error:
-
         print(
             "Email approval validation error:",
             str(error)
@@ -503,7 +336,6 @@ async def approve_email_draft_endpoint(
         )
 
     except Exception as error:
-
         print(
             "Email approval error:",
             str(error)
@@ -515,74 +347,32 @@ async def approve_email_draft_endpoint(
         )
 
 
-# ============================================================
-# SEND APPROVED EMAIL
-# ============================================================
-
+# Send approved email
 @app.post("/email/send")
 async def send_email_endpoint(
     request: EmailSendRequest
 ):
-
     try:
-
         print("\n==========================================")
         print("SENDING EMAIL")
         print("==========================================")
 
         draft = request.draft
 
-        # ====================================================
-        # CHECK DRAFT
-        # ====================================================
-
         if not isinstance(
             draft,
             dict
         ):
-
             raise HTTPException(
                 status_code=400,
                 detail="Invalid email draft."
             )
 
-        # ====================================================
-        # IMPORTANT SECURITY CHECK
-        # ====================================================
-        #
-        # Only an APPROVED email can be sent.
-        #
-        # This prevents:
-        #
-        # draft -> send
-        #
-        # without manager approval.
-        #
-        # Correct flow:
-        #
-        # draft
-        #   ↓
-        # edit
-        #   ↓
-        # approve
-        #   ↓
-        # send
-        #
-        # ====================================================
-
         if draft.get("status") != "approved":
-
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Email must be approved "
-                    "before it can be sent."
-                )
+                detail="Email must be approved before it can be sent."
             )
-
-        # ====================================================
-        # SEND EMAIL
-        # ====================================================
 
         result = send_email(
             draft
@@ -592,10 +382,6 @@ async def send_email_endpoint(
             "Email sent successfully."
         )
 
-        # ====================================================
-        # RETURN RESULT
-        # ====================================================
-
         return {
             "success": True,
             "message": "Email sent successfully.",
@@ -603,11 +389,9 @@ async def send_email_endpoint(
         }
 
     except HTTPException:
-
         raise
 
     except ValueError as error:
-
         print(
             "Email sending validation error:",
             str(error)
@@ -619,7 +403,6 @@ async def send_email_endpoint(
         )
 
     except Exception as error:
-
         print(
             "Email sending error:",
             type(error).__name__,
@@ -633,19 +416,14 @@ async def send_email_endpoint(
         )
 
 
-# ============================================================
-# COMPLETE MEETING AI PIPELINE
-# ============================================================
-
+# Process meeting audio
 @app.post("/process-meeting")
 async def process_meeting_audio(
     file: UploadFile = File(...)
 ):
-
     temp_path = None
 
     try:
-
         print("\n==========================================")
         print("MEETING AUDIO RECEIVED")
         print("==========================================")
@@ -660,32 +438,18 @@ async def process_meeting_audio(
             file.content_type
         )
 
-        # ====================================================
-        # VALIDATE FILE
-        # ====================================================
-
         if not file.filename:
-
             raise HTTPException(
                 status_code=400,
                 detail="Audio file is required."
             )
-
-        # ====================================================
-        # GET FILE EXTENSION
-        # ====================================================
 
         extension = os.path.splitext(
             file.filename
         )[1]
 
         if not extension:
-
             extension = ".webm"
-
-        # ====================================================
-        # SAVE TEMPORARY FILE
-        # ====================================================
 
         with tempfile.NamedTemporaryFile(
             delete=False,
@@ -711,10 +475,6 @@ async def process_meeting_audio(
             "bytes"
         )
 
-        # ====================================================
-        # RUN MEETING PIPELINE
-        # ====================================================
-
         print("\n==========================================")
         print("STARTING MEETING AI PIPELINE")
         print("==========================================")
@@ -732,27 +492,16 @@ async def process_meeting_audio(
             len(result)
         )
 
-        # ====================================================
-        # RETURN RESULT
-        # ====================================================
-
         return {
-
             "success": True,
-
-            "message":
-                "Meeting processed successfully.",
-
+            "message": "Meeting processed successfully.",
             "segments": result
-
         }
 
     except HTTPException:
-
         raise
 
     except Exception as error:
-
         print("\n==========================================")
         print("MEETING PIPELINE ERROR")
         print("==========================================")
@@ -771,18 +520,11 @@ async def process_meeting_audio(
         )
 
     finally:
-
-        # ====================================================
-        # DELETE TEMPORARY AUDIO
-        # ====================================================
-
         if (
             temp_path
             and os.path.exists(temp_path)
         ):
-
             try:
-
                 os.remove(
                     temp_path
                 )
@@ -792,9 +534,8 @@ async def process_meeting_audio(
                 )
 
             except Exception as error:
-
                 print(
-                    "Could not delete temporary "
-                    "meeting file:",
+                    "Could not delete temporary meeting file:",
                     str(error)
                 )
+

@@ -1,9 +1,5 @@
 const db = require("../config/db");
 
-// ============================================================
-// HELPER: GET USER ID FROM JWT
-// ============================================================
-
 const getUserId = (req) => {
     return (
         req.user?.id ||
@@ -11,10 +7,7 @@ const getUserId = (req) => {
         req.user?.user_id
     );
 };
-
-// ============================================================
 // CREATE PROJECT
-// ============================================================
 
 const createProject = async (req, res) => {
     try {
@@ -93,28 +86,6 @@ const createProject = async (req, res) => {
     }
 };
 
-// ============================================================
-// GET ALL PROJECTS
-//
-// USER CAN SEE:
-//
-// 1. Projects created by themselves
-// 2. Projects where they are a member
-//
-// IMPORTANT:
-//
-// Seeing a project does NOT automatically give edit/delete
-// permission.
-//
-// is_owner = true
-//      -> user created the project
-//
-// user_role = owner
-//      -> user created the project
-//
-// user_role = member
-//      -> user belongs to the project
-// ============================================================
 
 const getProjects = async (req, res) => {
     try {
@@ -189,16 +160,7 @@ const getProjects = async (req, res) => {
     }
 };
 
-// ============================================================
 // GET SINGLE PROJECT
-//
-// USER CAN VIEW:
-//
-// - Their own project
-// - Project where they are a member
-//
-// But viewing does NOT give modification permission.
-// ============================================================
 
 const getProjectById = async (req, res) => {
 
@@ -297,14 +259,7 @@ const getProjectById = async (req, res) => {
         });
     }
 };
-
-// ============================================================
 // GET PROJECT TEAM MEMBERS
-//
-// Both owner and members can VIEW the team.
-//
-// This endpoint does NOT allow modifying the team.
-// ============================================================
 
 const getProjectMembers = async (req, res) => {
 
@@ -434,20 +389,7 @@ const getProjectMembers = async (req, res) => {
     }
 };
 
-// ============================================================
 // UPDATE PROJECT
-//
-// ONLY PROJECT CREATOR CAN UPDATE.
-//
-// A MEMBER CAN:
-//
-// ✅ View project
-// ❌ Edit project
-//
-// Backend checks:
-//
-//     created_by = user_id
-// ============================================================
 
 const updateProject = async (req, res) => {
 
@@ -613,33 +555,7 @@ const updateProject = async (req, res) => {
         });
     }
 };
-
-// ============================================================
 // DELETE PROJECT
-//
-// ONLY PROJECT CREATOR CAN DELETE.
-//
-// Member:
-//
-// ✅ Can see project
-// ❌ Cannot delete project
-//
-// IMPORTANT:
-//
-// When the owner deletes the project, members will no longer
-// be able to retrieve it because getProjects() only returns
-// existing projects.
-//
-// Your database should ideally have:
-//
-// project_members.project_id
-//     ON DELETE CASCADE
-//
-// tasks.project_id
-//     ON DELETE CASCADE
-//
-// This makes associated records disappear automatically.
-// ============================================================
 
 const deleteProject = async (req, res) => {
 

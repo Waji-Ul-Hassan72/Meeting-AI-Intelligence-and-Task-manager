@@ -34,7 +34,7 @@ const aiPipelineRoutes = require("./routes/aiPipelineRoutes");
 const projectMemberRoutes = require("./routes/projectMemberRoutes");
 const teamRoutes = require("./routes/teamRoutes");
 const projectInvitationRoutes = require("./routes/projectInvitationRoutes");
-
+const emailRoutes = require("./routes/emailRoutes");
 // ============================================================
 // Initialize Express
 // ============================================================
@@ -138,6 +138,8 @@ app.use("/api/meetings", meetingRoutes);
 app.use("/api/transcription", transcriptionRoutes);
 
 app.use("/api/ai-pipeline", aiPipelineRoutes);
+
+app.use("/api/email", emailRoutes);
 
 // Project members use /api/projects/:projectId/...
 app.use("/api/projects", projectMemberRoutes);
