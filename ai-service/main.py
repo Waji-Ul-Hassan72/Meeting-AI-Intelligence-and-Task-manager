@@ -1,13 +1,12 @@
-
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import tempfile
 import os
 
+from services.task_assignment_service import process_task_assignment
 from services.meeting_pipeline import process_meeting
 from services.assistant_service import ask_ai_assistant
-
 from services.email_service import (
     create_email_draft,
     update_email_draft,
@@ -16,14 +15,15 @@ from services.email_service import (
 )
 
 
-# FastAPI application
+# ============================================================
+# FASTAPI APPLICATION INITIALIZATION & CONFIGURATION
+# ============================================================
+
 app = FastAPI(
     title="CollabFlow AI Service",
     version="1.0.0"
 )
 
-
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -35,13 +35,15 @@ app.add_middleware(
 )
 
 
-# Assistant request model
+# ============================================================
+# PYDANTIC MODELS
+# ============================================================
+
 class AssistantRequest(BaseModel):
     project_id: str
     question: str
 
 
-# Email draft request model
 class EmailDraftRequest(BaseModel):
     recipient_name: str
     recipient_email: str
@@ -49,7 +51,6 @@ class EmailDraftRequest(BaseModel):
     body: str
 
 
-# Email update request model
 class EmailUpdateRequest(BaseModel):
     draft: dict
     recipient_name: str | None = None
@@ -58,17 +59,18 @@ class EmailUpdateRequest(BaseModel):
     body: str | None = None
 
 
-# Email approval request model
 class EmailApproveRequest(BaseModel):
     draft: dict
 
 
-# Email send request model
 class EmailSendRequest(BaseModel):
     draft: dict
 
 
-# Root endpoint
+# ============================================================
+# ROOT ENDPOINT
+# ============================================================
+
 @app.get("/")
 def root():
     return {
@@ -77,7 +79,10 @@ def root():
     }
 
 
-# AI project assistant
+# ============================================================
+# AI PROJECT ASSISTANT ENDPOINT
+# ============================================================
+
 @app.post("/assistant")
 async def project_assistant(
     request: AssistantRequest,
@@ -126,6 +131,15 @@ async def project_assistant(
                 status_code=401,
                 detail="Invalid authentication token."
             )
+       
+        assignment_result = process_task_assignment(token=token, project_id=request.project_id, question=request.question) 
+        if assignment_result: 
+            print("\n==========================================") 
+            print("AI TASK ASSIGNMENT DETECTED") 
+            print("==========================================") 
+            print("Assignment result:", assignment_result)
+            print("==========================================") 
+            return assignment_result
 
         result = ask_ai_assistant(
             token=token,
@@ -184,7 +198,10 @@ async def project_assistant(
         )
 
 
-# Create email draft
+# ============================================================
+# EMAIL ENDPOINTS
+# ============================================================
+
 @app.post("/email/draft")
 async def create_email_draft_endpoint(
     request: EmailDraftRequest
@@ -249,7 +266,6 @@ async def create_email_draft_endpoint(
         )
 
 
-# Update email draft
 @app.put("/email/draft")
 async def update_email_draft_endpoint(
     request: EmailUpdateRequest
@@ -300,7 +316,6 @@ async def update_email_draft_endpoint(
         )
 
 
-# Approve email draft
 @app.post("/email/draft/approve")
 async def approve_email_draft_endpoint(
     request: EmailApproveRequest
@@ -347,7 +362,6 @@ async def approve_email_draft_endpoint(
         )
 
 
-# Send approved email
 @app.post("/email/send")
 async def send_email_endpoint(
     request: EmailSendRequest
@@ -416,7 +430,10 @@ async def send_email_endpoint(
         )
 
 
-# Process meeting audio
+# ============================================================
+# MEETING AUDIO PROCESSING ENDPOINT
+# ============================================================
+
 @app.post("/process-meeting")
 async def process_meeting_audio(
     file: UploadFile = File(...)
@@ -538,4 +555,3 @@ async def process_meeting_audio(
                     "Could not delete temporary meeting file:",
                     str(error)
                 )
-

@@ -35,6 +35,8 @@ const projectMemberRoutes = require("./routes/projectMemberRoutes");
 const teamRoutes = require("./routes/teamRoutes");
 const projectInvitationRoutes = require("./routes/projectInvitationRoutes");
 const emailRoutes = require("./routes/emailRoutes");
+const aiTaskRoutes = require("./routes/aiTaskRoutes");
+
 // ============================================================
 // Initialize Express
 // ============================================================
@@ -145,6 +147,8 @@ app.use("/api/email", emailRoutes);
 app.use("/api/projects", projectMemberRoutes);
 
 app.use("/api/teams", teamRoutes);
+
+app.use("/api/ai-tasks", aiTaskRoutes);
 
 app.use(
     "/api/project-invitations",

@@ -1,19 +1,386 @@
-
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { askAIAssistant } from "../services/api";
 
-export default function AIAssistant({ projectId }) {
+export default function AIAssistant({ projectId, onTaskCreated }) {
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState([]);
+  // ============================================================
+  // PERSIST AI CHAT PER PROJECT
+  // ============================================================
+
+  const getChatStorageKey = () => {
+    return `aiAssistantMessages_${projectId}`;
+  };
+
+  const [messages, setMessages] = useState(() => {
+    if (!projectId) return [];
+
+    try {
+      const savedMessages = localStorage.getItem(
+        `aiAssistantMessages_${projectId}`
+      );
+
+      if (!savedMessages) return [];
+
+      const parsedMessages = JSON.parse(savedMessages);
+
+      return Array.isArray(parsedMessages)
+        ? parsedMessages
+        : [];
+    } catch (error) {
+      console.error("Failed to restore AI chat:", error);
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    try {
+      localStorage.setItem(
+        getChatStorageKey(),
+        JSON.stringify(messages)
+      );
+    } catch (error) {
+      console.error("Failed to save AI chat:", error);
+    }
+  }, [messages, projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setMessages([]);
+      return;
+    }
+
+    try {
+      const savedMessages = localStorage.getItem(
+        `aiAssistantMessages_${projectId}`
+      );
+
+      if (!savedMessages) {
+        setMessages([]);
+        return;
+      }
+
+      const parsedMessages = JSON.parse(savedMessages);
+
+      setMessages(
+        Array.isArray(parsedMessages)
+          ? parsedMessages
+          : []
+      );
+    } catch (error) {
+      console.error("Failed to load project AI chat:", error);
+      setMessages([]);
+    }
+  }, [projectId]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Email states
+  // ============================================================
+  // EMAIL STATES
+  // ============================================================
+
   const [emailDraft, setEmailDraft] = useState(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
 
-  // Ask AI
+  // ============================================================
+  // TASK ASSIGNMENT STATES
+  // ============================================================
+
+  const [taskAssignmentLoading, setTaskAssignmentLoading] =
+    useState(false);
+
+  const [taskAssignmentError, setTaskAssignmentError] =
+    useState("");
+
+  // ============================================================
+  // GET AUTH TOKEN
+  // ============================================================
+
+  const getToken = () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("Authentication token not found.");
+    }
+
+    return token;
+  };
+
+  // ============================================================
+  // ASSIGN TASK THROUGH BACKEND
+  // ============================================================
+
+  const assignTaskFromAI = async (taskData) => {
+    try {
+      setTaskAssignmentLoading(true);
+      setTaskAssignmentError("");
+
+      const token = getToken();
+
+      if (!projectId) {
+        throw new Error("Project ID is required.");
+      }
+
+      if (!taskData?.title?.trim()) {
+        throw new Error("Task title is required.");
+      }
+
+      const assignedTo =
+        taskData.assigned_to ||
+        taskData.assignedTo ||
+        taskData.member_name ||
+        taskData.memberName ||
+        taskData.recipientName ||
+        "";
+
+      if (!assignedTo.trim()) {
+        throw new Error(
+          "The team member to assign the task to was not specified."
+        );
+      }
+
+      // ========================================================
+      // SEND TASK TO NODE BACKEND
+      // ========================================================
+
+      const response = await fetch(
+        "http://localhost:3000/api/ai-tasks/assign",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+
+          body: JSON.stringify({
+            project_id: projectId,
+
+            title: taskData.title.trim(),
+
+            description:
+              taskData.description || "",
+
+            assigned_to: assignedTo.trim(),
+
+            priority:
+              taskData.priority || "Medium",
+
+            status:
+              taskData.status || "Pending",
+
+            due_date:
+              taskData.due_date ||
+              taskData.dueDate ||
+              null,
+          }),
+        }
+      );
+
+      // ========================================================
+      // READ RESPONSE SAFELY
+      // ========================================================
+
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      // ========================================================
+      // HANDLE BACKEND ERROR
+      // ========================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            data?.message ||
+            data?.detail ||
+            "Failed to assign task."
+        );
+      }
+
+      // ========================================================
+      // VALIDATE CREATED TASK
+      // ========================================================
+
+      if (!data?.task) {
+        throw new Error(
+          "Task assignment succeeded, but the created task was not returned."
+        );
+      }
+
+      // ========================================================
+      // CLEAR ERROR AFTER SUCCESS
+      // ========================================================
+
+      setTaskAssignmentError("");
+
+      // ========================================================
+      // NOTIFY PARENT PROJECT DETAILS COMPONENT
+      // ========================================================
+
+      if (typeof onTaskCreated === "function") {
+        try {
+          onTaskCreated(data.task);
+        } catch (callbackError) {
+          console.error(
+            "onTaskCreated callback error:",
+            callbackError
+          );
+        }
+      }
+
+      // ========================================================
+      // GLOBAL EVENT
+      //
+      // This allows ProjectDetails to refresh its task list
+      // without requiring a prop.
+      // ========================================================
+
+      window.dispatchEvent(
+        new CustomEvent("ai-task-created", {
+          detail: {
+            task: data.task,
+            assignedMember:
+              data.assignedMember || null,
+            emailSent:
+              data.emailSent !== false,
+          },
+        })
+      );
+
+      return data;
+    } catch (error) {
+      console.error(
+        "AI task assignment error:",
+        error
+      );
+
+      setTaskAssignmentError(
+        error?.message ||
+          "Failed to assign task."
+      );
+
+      throw error;
+    } finally {
+      setTaskAssignmentLoading(false);
+    }
+  };
+
+  // ============================================================
+  // EXTRACT AI TASK ASSIGNMENT
+  // ============================================================
+
+  const getTaskAssignmentFromResult = (result) => {
+    if (!result) {
+      return null;
+    }
+
+    // ----------------------------------------------------------
+    // Format 1:
+    //
+    // {
+    //   action: "assign_task",
+    //   task: {
+    //      title: "...",
+    //      assigned_to: "Ali"
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (
+      result.action === "assign_task" &&
+      result.task
+    ) {
+      return result.task;
+    }
+
+    // ----------------------------------------------------------
+    // Format 2:
+    //
+    // {
+    //   action: "assign_task",
+    //   assign_task: {
+    //      ...
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (
+      result.action === "assign_task" &&
+      result.assign_task
+    ) {
+      return result.assign_task;
+    }
+
+    // ----------------------------------------------------------
+    // Format 3:
+    //
+    // {
+    //   assign_task: {
+    //      ...
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (result.assign_task) {
+      return result.assign_task;
+    }
+
+    // ----------------------------------------------------------
+    // Format 4:
+    //
+    // {
+    //   assignTask: {
+    //      ...
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (result.assignTask) {
+      return result.assignTask;
+    }
+
+    // ----------------------------------------------------------
+    // Format 5:
+    //
+    // {
+    //   taskAssignment: {
+    //      ...
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (result.taskAssignment) {
+      return result.taskAssignment;
+    }
+
+    // ----------------------------------------------------------
+    // Format 6:
+    //
+    // {
+    //   task_assignment: {
+    //      ...
+    //   }
+    // }
+    // ----------------------------------------------------------
+
+    if (result.task_assignment) {
+      return result.task_assignment;
+    }
+
+    return null;
+  };
+
+  // ============================================================
+  // ASK AI
+  // ============================================================
+
   const handleAskAI = async (e) => {
     e.preventDefault();
 
@@ -32,6 +399,11 @@ export default function AIAssistant({ projectId }) {
       setLoading(true);
       setError("");
       setEmailError("");
+      setTaskAssignmentError("");
+
+      // ========================================================
+      // ADD USER QUESTION TO CHAT
+      // ========================================================
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -43,10 +415,155 @@ export default function AIAssistant({ projectId }) {
 
       setQuestion("");
 
+      // ========================================================
+      // ASK AI
+      // ========================================================
+
       const result = await askAIAssistant(
         projectId,
         trimmedQuestion
       );
+
+      console.log(
+        "AI Assistant response:",
+        result
+      );
+
+      // ========================================================
+      // TASK ASSIGNMENT
+      // ========================================================
+
+      const isAssignmentRequest =
+        result?.action === "assign_task" ||
+        Boolean(
+          result?.assign_task ||
+            result?.assignTask ||
+            result?.taskAssignment ||
+            result?.task_assignment
+        );
+
+      // --------------------------------------------------------
+      // Assignment request detected but Python could not
+      // extract a valid task.
+      //
+      // Example:
+      //
+      // "Assign a task"
+      //
+      // Python may return:
+      //
+      // {
+      //   success: false,
+      //   action: "assign_task",
+      //   message: "Please specify..."
+      // }
+      // --------------------------------------------------------
+
+      if (
+        isAssignmentRequest &&
+        !getTaskAssignmentFromResult(result)
+      ) {
+        const assignmentMessage =
+          result?.message ||
+          result?.answer ||
+          "Please provide the task and team member you want to assign it to.";
+
+        setMessages((previousMessages) => [
+          ...previousMessages,
+          {
+            role: "assistant",
+            content: assignmentMessage,
+          },
+        ]);
+
+        setTaskAssignmentError(
+          result?.message || ""
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // Valid assignment request
+      // --------------------------------------------------------
+
+      const taskAssignment =
+        getTaskAssignmentFromResult(result);
+
+      if (taskAssignment) {
+        try {
+          const assignmentResult =
+            await assignTaskFromAI(
+              taskAssignment
+            );
+
+          const assignedMember =
+            assignmentResult?.assignedMember;
+
+          const assignedMemberName =
+            assignedMember?.name ||
+            taskAssignment.assigned_to ||
+            taskAssignment.assignedTo ||
+            taskAssignment.member_name ||
+            taskAssignment.memberName ||
+            "the selected member";
+
+          const emailWasSent =
+            assignmentResult?.emailSent !== false;
+
+          const taskTitle =
+            assignmentResult?.task?.title ||
+            taskAssignment.title ||
+            "the task";
+
+          let assignmentMessage =
+            `Task "${taskTitle}" has been assigned to ${assignedMemberName}.`;
+
+          if (emailWasSent) {
+            assignmentMessage +=
+              " The task assignment email was sent successfully.";
+          } else {
+            assignmentMessage +=
+              " However, the task assignment email could not be sent.";
+          }
+
+          setMessages((previousMessages) => [
+            ...previousMessages,
+            {
+              role: "assistant",
+              content: assignmentMessage,
+            },
+          ]);
+
+        } catch (assignmentError) {
+          console.error(
+            "Task assignment failed:",
+            assignmentError
+          );
+
+          setMessages((previousMessages) => [
+            ...previousMessages,
+            {
+              role: "assistant",
+              content:
+                assignmentError?.message ||
+                "I understood the task assignment, but I could not create the task.",
+            },
+          ]);
+        }
+
+        // --------------------------------------------------------
+        // This was a task-assignment request.
+        //
+        // Do NOT process an email draft from the same response.
+        // --------------------------------------------------------
+
+        return;
+      }
+
+      // ========================================================
+      // NORMAL AI RESPONSE
+      // ========================================================
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -58,6 +575,10 @@ export default function AIAssistant({ projectId }) {
         },
       ]);
 
+      // ========================================================
+      // EMAIL DRAFT
+      // ========================================================
+
       const generatedEmail =
         result?.email ||
         result?.emailDraft ||
@@ -65,44 +586,53 @@ export default function AIAssistant({ projectId }) {
         null;
 
       if (generatedEmail) {
-        await createEmailDraft(generatedEmail);
+        await createEmailDraft(
+          generatedEmail
+        );
       }
+
     } catch (error) {
-      console.error("AI assistant error:", error);
+      console.error(
+        "AI assistant error:",
+        error
+      );
 
       setError(
         error?.message ||
           "Failed to communicate with AI assistant."
       );
+
     } finally {
       setLoading(false);
     }
   };
 
-  // Create email draft
+  // ============================================================
+  // CREATE EMAIL DRAFT
+  // ============================================================
+
   const createEmailDraft = async (email) => {
     try {
       setEmailLoading(true);
       setEmailError("");
 
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
-      if (!token) {
-        throw new Error(
-          "Authentication token not found."
-        );
-      }
+      const recipientEmail =
+        email?.recipientEmail ||
+        email?.recipient_email ||
+        "";
 
-      if (
-        !email.recipientEmail &&
-        !email.recipient_email
-      ) {
+      if (!recipientEmail) {
         throw new Error(
           "The AI did not provide a recipient email."
         );
       }
 
-      if (!email.subject || !email.body) {
+      if (
+        !email.subject ||
+        !email.body
+      ) {
         throw new Error(
           "The AI did not provide complete email information."
         );
@@ -124,27 +654,36 @@ export default function AIAssistant({ projectId }) {
               email.recipient_name ||
               "",
 
-            recipientEmail:
-              email.recipientEmail ||
-              email.recipient_email,
+            recipientEmail,
 
-            subject: email.subject,
+            subject:
+              email.subject,
 
-            body: email.body,
+            body:
+              email.body,
           }),
         }
       );
 
-      const data = await response.json();
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.message ||
+            data?.error ||
+            data?.detail ||
             "Failed to create email draft."
         );
       }
 
       setEmailDraft(data.draft);
+
     } catch (error) {
       console.error(
         "Create email draft error:",
@@ -155,12 +694,16 @@ export default function AIAssistant({ projectId }) {
         error?.message ||
           "Failed to create email draft."
       );
+
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Update email draft
+  // ============================================================
+  // UPDATE EMAIL DRAFT
+  // ============================================================
+
   const handleUpdateEmailDraft = async () => {
     if (!emailDraft) {
       return;
@@ -170,13 +713,7 @@ export default function AIAssistant({ projectId }) {
       setEmailLoading(true);
       setEmailError("");
 
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        throw new Error(
-          "Authentication token not found."
-        );
-      }
+      const token = getToken();
 
       const response = await fetch(
         "http://localhost:3000/api/email/draft",
@@ -206,16 +743,25 @@ export default function AIAssistant({ projectId }) {
         }
       );
 
-      const data = await response.json();
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.message ||
+            data?.error ||
+            data?.detail ||
             "Failed to update email draft."
         );
       }
 
       setEmailDraft(data.draft);
+
     } catch (error) {
       console.error(
         "Update email draft error:",
@@ -226,12 +772,16 @@ export default function AIAssistant({ projectId }) {
         error?.message ||
           "Failed to update email draft."
       );
+
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Approve email
+  // ============================================================
+  // APPROVE EMAIL
+  // ============================================================
+
   const handleApproveEmail = async () => {
     if (!emailDraft) {
       return;
@@ -241,13 +791,7 @@ export default function AIAssistant({ projectId }) {
       setEmailLoading(true);
       setEmailError("");
 
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        throw new Error(
-          "Authentication token not found."
-        );
-      }
+      const token = getToken();
 
       const response = await fetch(
         "http://localhost:3000/api/email/draft/approve",
@@ -265,16 +809,25 @@ export default function AIAssistant({ projectId }) {
         }
       );
 
-      const data = await response.json();
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.message ||
+            data?.error ||
+            data?.detail ||
             "Failed to approve email."
         );
       }
 
       setEmailDraft(data.draft);
+
     } catch (error) {
       console.error(
         "Approve email error:",
@@ -285,12 +838,16 @@ export default function AIAssistant({ projectId }) {
         error?.message ||
           "Failed to approve email."
       );
+
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Send email
+  // ============================================================
+  // SEND EMAIL
+  // ============================================================
+
   const handleSendEmail = async () => {
     if (!emailDraft) {
       return;
@@ -300,20 +857,80 @@ export default function AIAssistant({ projectId }) {
       setEmailLoading(true);
       setEmailError("");
 
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        throw new Error(
-          "Authentication token not found."
-        );
-      }
+      const token = getToken();
 
       let approvedDraft = emailDraft;
 
+      // --------------------------------------------------------
       // Approve the draft first if it is still a draft
-      if (emailDraft.status === "draft") {
-        const approveResponse = await fetch(
-          "http://localhost:3000/api/email/draft/approve",
+      // --------------------------------------------------------
+
+      if (
+        emailDraft.status === "draft"
+      ) {
+        const approveResponse =
+          await fetch(
+            "http://localhost:3000/api/email/draft/approve",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+
+              body: JSON.stringify({
+                draft: emailDraft,
+              }),
+            }
+          );
+
+        let approveData = null;
+
+        try {
+          approveData =
+            await approveResponse.json();
+        } catch {
+          approveData = null;
+        }
+
+        if (!approveResponse.ok) {
+          throw new Error(
+            approveData?.message ||
+              approveData?.error ||
+              approveData?.detail ||
+              "Failed to approve email."
+          );
+        }
+
+        approvedDraft =
+          approveData.draft;
+
+        setEmailDraft(
+          approvedDraft
+        );
+      }
+
+      // --------------------------------------------------------
+      // Email must be approved before sending
+      // --------------------------------------------------------
+
+      if (
+        approvedDraft.status !==
+        "approved"
+      ) {
+        throw new Error(
+          "Email must be approved before sending."
+        );
+      }
+
+      // --------------------------------------------------------
+      // Send approved email
+      // --------------------------------------------------------
+
+      const sendResponse =
+        await fetch(
+          "http://localhost:3000/api/email/send",
           {
             method: "POST",
 
@@ -323,55 +940,25 @@ export default function AIAssistant({ projectId }) {
             },
 
             body: JSON.stringify({
-              draft: emailDraft,
+              draft: approvedDraft,
             }),
           }
         );
 
-        const approveData =
-          await approveResponse.json();
+      let sendData = null;
 
-        if (!approveResponse.ok) {
-          throw new Error(
-            approveData?.message ||
-              "Failed to approve email."
-          );
-        }
-
-        approvedDraft = approveData.draft;
-
-        setEmailDraft(approvedDraft);
+      try {
+        sendData =
+          await sendResponse.json();
+      } catch {
+        sendData = null;
       }
-
-      // Send approved email
-      if (approvedDraft.status !== "approved") {
-        throw new Error(
-          "Email must be approved before sending."
-        );
-      }
-
-      const sendResponse = await fetch(
-        "http://localhost:3000/api/email/send",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-
-          body: JSON.stringify({
-            draft: approvedDraft,
-          }),
-        }
-      );
-
-      const sendData =
-        await sendResponse.json();
 
       if (!sendResponse.ok) {
         throw new Error(
           sendData?.message ||
+            sendData?.error ||
+            sendData?.detail ||
             "Failed to send email."
         );
       }
@@ -382,6 +969,7 @@ export default function AIAssistant({ projectId }) {
           status: "sent",
         }
       );
+
     } catch (error) {
       console.error(
         "Send email error:",
@@ -392,55 +980,72 @@ export default function AIAssistant({ projectId }) {
         error?.message ||
           "Failed to send email."
       );
+
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Update email field
+  // ============================================================
+  // UPDATE EMAIL FIELD
+  // ============================================================
+
   const updateEmailField = (
     field,
     value
   ) => {
-    setEmailDraft((previousDraft) => {
-      if (!previousDraft) {
-        return previousDraft;
-      }
+    setEmailDraft(
+      (previousDraft) => {
+        if (!previousDraft) {
+          return previousDraft;
+        }
 
-      if (field === "recipientName") {
+        if (
+          field ===
+          "recipientName"
+        ) {
+          return {
+            ...previousDraft,
+
+            to: {
+              ...previousDraft.to,
+              name: value,
+            },
+          };
+        }
+
+        if (
+          field ===
+          "recipientEmail"
+        ) {
+          return {
+            ...previousDraft,
+
+            to: {
+              ...previousDraft.to,
+              email: value,
+            },
+          };
+        }
+
         return {
           ...previousDraft,
-
-          to: {
-            ...previousDraft.to,
-            name: value,
-          },
+          [field]: value,
         };
       }
-
-      if (field === "recipientEmail") {
-        return {
-          ...previousDraft,
-
-          to: {
-            ...previousDraft.to,
-            email: value,
-          },
-        };
-      }
-
-      return {
-        ...previousDraft,
-        [field]: value,
-      };
-    });
+    );
   };
 
+  // ============================================================
   // UI
+  // ============================================================
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
 
-      {/* Header */}
+      {/* ======================================================
+          HEADER
+      ======================================================= */}
 
       <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
 
@@ -466,9 +1071,13 @@ export default function AIAssistant({ projectId }) {
 
       </div>
 
-      {/* Chat Area */}
+      {/* ======================================================
+          CHAT AREA
+      ======================================================= */}
 
       <div className="h-[360px] overflow-y-auto p-5 space-y-4">
+
+        {/* Empty State */}
 
         {messages.length === 0 && (
 
@@ -500,6 +1109,10 @@ export default function AIAssistant({ projectId }) {
                 </div>
 
                 <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                  "Assign login API task to Ali."
+                </div>
+
+                <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
                   "Send an email to Ali about his task."
                 </div>
 
@@ -511,30 +1124,34 @@ export default function AIAssistant({ projectId }) {
 
         )}
 
-        {messages.map((message, index) => (
+        {/* Messages */}
 
-          <div
-            key={index}
-            className={`flex ${
-              message.role === "user"
-                ? "justify-end"
-                : "justify-start"
-            }`}
-          >
+        {messages.map(
+          (message, index) => (
 
             <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl text-xs leading-5 ${
+              key={index}
+              className={`flex ${
                 message.role === "user"
-                  ? "bg-slate-900 text-white rounded-br-md"
-                  : "bg-slate-100 text-slate-700 rounded-bl-md"
+                  ? "justify-end"
+                  : "justify-start"
               }`}
             >
-              {message.content}
+
+              <div
+                className={`max-w-[80%] px-4 py-3 rounded-2xl text-xs leading-5 ${
+                  message.role === "user"
+                    ? "bg-slate-900 text-white rounded-br-md"
+                    : "bg-slate-100 text-slate-700 rounded-bl-md"
+                }`}
+              >
+                {message.content}
+              </div>
+
             </div>
 
-          </div>
-
-        ))}
+          )
+        )}
 
         {/* AI Loading */}
 
@@ -551,14 +1168,16 @@ export default function AIAssistant({ projectId }) {
                 <span
                   className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
                   style={{
-                    animationDelay: "0.15s",
+                    animationDelay:
+                      "0.15s",
                   }}
                 />
 
                 <span
                   className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
                   style={{
-                    animationDelay: "0.3s",
+                    animationDelay:
+                      "0.3s",
                   }}
                 />
 
@@ -570,7 +1189,43 @@ export default function AIAssistant({ projectId }) {
 
         )}
 
-        {/* Email Draft */}
+        {/* ====================================================
+            TASK ASSIGNMENT LOADING
+        ===================================================== */}
+
+        {taskAssignmentLoading && (
+
+          <div className="mt-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+
+            <div className="flex items-center gap-2">
+
+              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+
+              <span className="text-xs text-blue-700 font-semibold">
+                Creating task and sending assignment email...
+              </span>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {/* ====================================================
+            TASK ASSIGNMENT ERROR
+        ===================================================== */}
+
+        {taskAssignmentError && (
+
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            {taskAssignmentError}
+          </div>
+
+        )}
+
+        {/* ====================================================
+            EMAIL DRAFT
+        ===================================================== */}
 
         {emailDraft && (
 
@@ -619,7 +1274,8 @@ export default function AIAssistant({ projectId }) {
               <input
                 type="text"
                 value={
-                  emailDraft?.to?.name || ""
+                  emailDraft?.to?.name ||
+                  ""
                 }
                 onChange={(e) =>
                   updateEmailField(
@@ -629,7 +1285,8 @@ export default function AIAssistant({ projectId }) {
                 }
                 disabled={
                   emailLoading ||
-                  emailDraft.status !== "draft"
+                  emailDraft.status !==
+                    "draft"
                 }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
               />
@@ -647,7 +1304,8 @@ export default function AIAssistant({ projectId }) {
               <input
                 type="email"
                 value={
-                  emailDraft?.to?.email || ""
+                  emailDraft?.to?.email ||
+                  ""
                 }
                 onChange={(e) =>
                   updateEmailField(
@@ -657,7 +1315,8 @@ export default function AIAssistant({ projectId }) {
                 }
                 disabled={
                   emailLoading ||
-                  emailDraft.status !== "draft"
+                  emailDraft.status !==
+                    "draft"
                 }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
               />
@@ -675,7 +1334,8 @@ export default function AIAssistant({ projectId }) {
               <input
                 type="text"
                 value={
-                  emailDraft?.subject || ""
+                  emailDraft?.subject ||
+                  ""
                 }
                 onChange={(e) =>
                   updateEmailField(
@@ -685,7 +1345,8 @@ export default function AIAssistant({ projectId }) {
                 }
                 disabled={
                   emailLoading ||
-                  emailDraft.status !== "draft"
+                  emailDraft.status !==
+                    "draft"
                 }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
               />
@@ -702,7 +1363,8 @@ export default function AIAssistant({ projectId }) {
 
               <textarea
                 value={
-                  emailDraft?.body || ""
+                  emailDraft?.body ||
+                  ""
                 }
                 onChange={(e) =>
                   updateEmailField(
@@ -712,7 +1374,8 @@ export default function AIAssistant({ projectId }) {
                 }
                 disabled={
                   emailLoading ||
-                  emailDraft.status !== "draft"
+                  emailDraft.status !==
+                    "draft"
                 }
                 rows={6}
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 resize-none disabled:bg-slate-100"
@@ -722,13 +1385,16 @@ export default function AIAssistant({ projectId }) {
 
             {/* Draft Actions */}
 
-            {emailDraft.status === "draft" && (
+            {emailDraft.status ===
+              "draft" && (
 
               <div className="flex gap-2">
 
                 <button
                   type="button"
-                  onClick={handleUpdateEmailDraft}
+                  onClick={
+                    handleUpdateEmailDraft
+                  }
                   disabled={emailLoading}
                   className="flex-1 px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 disabled:opacity-50"
                 >
@@ -739,7 +1405,9 @@ export default function AIAssistant({ projectId }) {
 
                 <button
                   type="button"
-                  onClick={handleApproveEmail}
+                  onClick={
+                    handleApproveEmail
+                  }
                   disabled={emailLoading}
                   className="flex-1 px-3 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 disabled:opacity-50"
                 >
@@ -750,7 +1418,9 @@ export default function AIAssistant({ projectId }) {
 
                 <button
                   type="button"
-                  onClick={handleSendEmail}
+                  onClick={
+                    handleSendEmail
+                  }
                   disabled={emailLoading}
                   className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:opacity-50"
                 >
@@ -765,11 +1435,14 @@ export default function AIAssistant({ projectId }) {
 
             {/* Approved Actions */}
 
-            {emailDraft.status === "approved" && (
+            {emailDraft.status ===
+              "approved" && (
 
               <button
                 type="button"
-                onClick={handleSendEmail}
+                onClick={
+                  handleSendEmail
+                }
                 disabled={emailLoading}
                 className="w-full px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:opacity-50"
               >
@@ -782,7 +1455,8 @@ export default function AIAssistant({ projectId }) {
 
             {/* Sent Message */}
 
-            {emailDraft.status === "sent" && (
+            {emailDraft.status ===
+              "sent" && (
 
               <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs font-semibold text-green-700 text-center">
                 Email sent successfully.
@@ -796,7 +1470,9 @@ export default function AIAssistant({ projectId }) {
 
       </div>
 
-      {/* General Error */}
+      {/* ======================================================
+          GENERAL ERROR
+      ======================================================= */}
 
       {error && (
 
@@ -806,7 +1482,9 @@ export default function AIAssistant({ projectId }) {
 
       )}
 
-      {/* Input */}
+      {/* ======================================================
+          INPUT
+      ======================================================= */}
 
       <form
         onSubmit={handleAskAI}
@@ -822,7 +1500,10 @@ export default function AIAssistant({ projectId }) {
               setQuestion(e.target.value)
             }
             placeholder="Ask about your project or email a member..."
-            disabled={loading}
+            disabled={
+              loading ||
+              taskAssignmentLoading
+            }
             className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-teal-500 disabled:opacity-50"
           />
 
@@ -830,6 +1511,7 @@ export default function AIAssistant({ projectId }) {
             type="submit"
             disabled={
               loading ||
+              taskAssignmentLoading ||
               !question.trim() ||
               !projectId
             }
@@ -837,6 +1519,8 @@ export default function AIAssistant({ projectId }) {
           >
             {loading
               ? "Thinking..."
+              : taskAssignmentLoading
+              ? "Assigning..."
               : "Ask"}
           </button>
 
@@ -846,5 +1530,4 @@ export default function AIAssistant({ projectId }) {
 
     </div>
   );
-}
-
+}    AIAssistant.jsx

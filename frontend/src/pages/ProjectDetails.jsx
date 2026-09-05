@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AIAssistant from "../components/AIAssistant";
 import Transcription from "../pages/Transcription";
@@ -300,8 +300,8 @@ function ProjectDetails() {
   // FETCH TASKS
   // =========================================================
 
-  useEffect(() => {
-    const fetchTasks = async () => {
+  const fetchTasks = useCallback(
+    async (showLoading = true) => {
       const token = getToken();
 
       if (!token) {
@@ -310,7 +310,10 @@ function ProjectDetails() {
       }
 
       try {
-        setLoadingTasks(true);
+        if (showLoading) {
+          setLoadingTasks(true);
+        }
+
         setTaskError("");
 
         const response = await fetch(
@@ -363,14 +366,50 @@ function ProjectDetails() {
             "Unable to load project tasks."
         );
       } finally {
-        setLoadingTasks(false);
+        if (showLoading) {
+          setLoadingTasks(false);
+        }
       }
+    },
+    [id]
+  );
+
+  useEffect(() => {
+    if (id) {
+      fetchTasks(true);
+    }
+  }, [id, fetchTasks]);
+
+  // =========================================================
+  // REFRESH TASKS IMMEDIATELY AFTER AI CREATES A TASK
+  // =========================================================
+
+  useEffect(() => {
+    const handleAITaskCreated = (event) => {
+      const createdTask = event?.detail?.task;
+
+      if (
+        createdTask?.project_id &&
+        String(createdTask.project_id) !== String(id)
+      ) {
+        return;
+      }
+
+      fetchTasks(false);
     };
 
-    if (id) {
-      fetchTasks();
-    }
-  }, [id]);
+    window.addEventListener(
+      "ai-task-created",
+      handleAITaskCreated
+    );
+
+    return () => {
+      window.removeEventListener(
+        "ai-task-created",
+        handleAITaskCreated
+      );
+    };
+  }, [id, fetchTasks]);
 
   // =========================================================
   // ATTACHMENT URL

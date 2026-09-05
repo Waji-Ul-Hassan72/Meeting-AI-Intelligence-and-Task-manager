@@ -1798,4 +1798,6 @@ module.exports = {
 
     deleteAllProjectTasks,
 
+    sendTaskAssignmentEmail
+
 };
