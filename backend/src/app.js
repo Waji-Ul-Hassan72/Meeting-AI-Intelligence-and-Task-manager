@@ -11,14 +11,8 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
-const passport = require("passport");
 const helmet = require("helmet");
-
-// ============================================================
-// Passport Configuration
-// ============================================================
-
-require("./config/passport");
+const passport = require("passport");
 
 // ============================================================
 // Route Imports
@@ -55,7 +49,13 @@ if (process.env.NODE_ENV === "production") {
 // Security
 // ============================================================
 
-app.use(helmet());
+// app.js
+app.use(
+    helmet({
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+    })
+);
 
 // ============================================================
 // HTTPS Redirect - Production Only
@@ -156,10 +156,10 @@ app.use(
 );
 
 app.use(
-  "/uploads",
-  express.static(
-    path.join(__dirname, "uploads")
-  )
+    "/uploads",
+    express.static(
+        path.join(__dirname, "uploads")
+    )
 );
 
 // ============================================================
