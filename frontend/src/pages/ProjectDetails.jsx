@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-
+import TaskCalendar from "../components/Calendar";
 import AIAssistant from "../components/AIAssistant";
 import Transcription from "../pages/Transcription";
 
@@ -561,16 +561,29 @@ function ProjectDetails() {
   // Normalize every task as soon as it enters React state.
   // This prevents the board/list UI from receiving a different
   // status representation from the backend.
-  const normalizeTaskForUI = (task) => {
-    if (!task) return task;
+ const normalizeTaskForUI = (task) => {
+  if (!task) return task;
 
-    const rawStatus = getTaskStatusValue(task);
+  const rawStatus = getTaskStatusValue(task);
 
-    return {
-      ...task,
-      status: normalizeStatus(rawStatus),
-    };
+  const rawDueDate =
+    task.due_date ||
+    task.dueDate ||
+    task.task_due_date ||
+    task.taskDueDate ||
+    null;
+
+  return {
+    ...task,
+
+    // Keep the original task data
+    // and make sure Calendar always has due_date.
+    due_date: rawDueDate,
+
+    // Normalize status for the existing task UI.
+    status: normalizeStatus(rawStatus),
   };
+};
 
   // =========================================================
   // TASK COUNTS
@@ -1203,36 +1216,37 @@ function ProjectDetails() {
               TABS
           ================================================= */}
 
-          <div className="flex items-center gap-1 overflow-x-auto">
+         <div className="flex items-center gap-1 overflow-x-auto">
 
-            {[
-              "tasks",
-              "meetings",
-              "transcription",
-              ...(isManager ? ["assistant"] : []),
-            ].map((tab) => (
+  {[
+    "tasks",
+    "meetings",
+    "calendar",
+    "transcription",
+    ...(isManager ? ["assistant"] : []),
+  ].map((tab) => (
 
-              <button
-                key={tab}
-                onClick={() =>
-                  handleTabClick(tab)
-                }
-                className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors capitalize whitespace-nowrap ${
-                  activeTab === tab
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
+    <button
+      key={tab}
+      onClick={() =>
+        handleTabClick(tab)
+      }
+      className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors capitalize whitespace-nowrap ${
+        activeTab === tab
+          ? "border-indigo-600 text-indigo-600"
+          : "border-transparent text-slate-500 hover:text-slate-800"
+      }`}
+    >
 
-                {tab === "assistant"
-                  ? "AI Assistant"
-                  : tab}
+      {tab === "assistant"
+        ? "AI Assistant"
+        : tab}
 
-              </button>
+    </button>
 
-            ))}
+  ))}
 
-          </div>
+</div>
 
         </div>
 
@@ -1785,6 +1799,10 @@ function ProjectDetails() {
           </div>
 
         )}
+
+        {activeTab === "calendar" && (
+  <TaskCalendar tasks={tasks} />
+)}
 
         {activeTab === "assistant" && isManager && (
 

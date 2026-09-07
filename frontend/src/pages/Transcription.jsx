@@ -28,11 +28,6 @@ function Transcription() {
   const { projectId, id } = useParams();
   const navigate = useNavigate();
 
-  // Support:
-  // /projects/:projectId/transcription
-  // /transcription/:projectId
-  // /transcription/:id
-
   const currentProjectId = projectId || id;
 
   // ==========================================================
@@ -59,6 +54,16 @@ function Transcription() {
     useState("");
 
   // ==========================================================
+  // NEW STATE
+  // ==========================================================
+
+  const [assigningTask, setAssigningTask] =
+    useState(false);
+
+  const [taskAssignmentMessage, setTaskAssignmentMessage] =
+    useState("");
+
+  // ==========================================================
   // REFS
   // ==========================================================
 
@@ -72,10 +77,6 @@ function Transcription() {
 
   const recordingTimerRef = useRef(null);
 
-  // IMPORTANT:
-  // Keep the actual Blob URL inside a ref.
-  // This prevents stale state values from causing
-  // incorrect URL.revokeObjectURL() calls.
   const audioUrlRef = useRef("");
 
   // ==========================================================
@@ -83,7 +84,6 @@ function Transcription() {
   // ==========================================================
 
   const createAudioUrl = (blob) => {
-    // Remove old URL if one exists
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
     }
@@ -101,7 +101,6 @@ function Transcription() {
   // ==========================================================
 
   const clearAudioUrl = () => {
-    // First stop the audio element from using the Blob URL.
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -115,7 +114,6 @@ function Transcription() {
       }
     }
 
-    // Now revoke the Blob URL.
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = "";
@@ -126,21 +124,16 @@ function Transcription() {
   };
 
   // ==========================================================
-  // CLEANUP ON COMPONENT UNMOUNT
+  // CLEANUP
   // ==========================================================
 
   useEffect(() => {
     return () => {
-      // Stop recording timer
       if (recordingTimerRef.current) {
-        clearInterval(
-          recordingTimerRef.current
-        );
-
+        clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
 
-      // Stop microphone
       if (mediaRecorderRef.current) {
         try {
           if (
@@ -161,7 +154,6 @@ function Transcription() {
           .forEach((track) => track.stop());
       }
 
-      // Clear audio element
       if (audioRef.current) {
         try {
           audioRef.current.pause();
@@ -175,12 +167,8 @@ function Transcription() {
         }
       }
 
-      // Revoke Blob URL
       if (audioUrlRef.current) {
-        URL.revokeObjectURL(
-          audioUrlRef.current
-        );
-
+        URL.revokeObjectURL(audioUrlRef.current);
         audioUrlRef.current = "";
       }
     };
@@ -229,13 +217,10 @@ function Transcription() {
     );
 
     setTranscriptionError("");
+    setTaskAssignmentMessage("");
     setTranscription([]);
     setPlainTranscript("");
     setIsPlaying(false);
-
-    // --------------------------------------------------------
-    // Validate audio
-    // --------------------------------------------------------
 
     if (!file.type.startsWith("audio/")) {
       setTranscriptionError(
@@ -246,10 +231,6 @@ function Transcription() {
 
       return;
     }
-
-    // --------------------------------------------------------
-    // Stop old audio
-    // --------------------------------------------------------
 
     if (audioRef.current) {
       try {
@@ -264,10 +245,6 @@ function Transcription() {
       }
     }
 
-    // --------------------------------------------------------
-    // Revoke old Blob URL
-    // --------------------------------------------------------
-
     if (audioUrlRef.current) {
       URL.revokeObjectURL(
         audioUrlRef.current
@@ -275,10 +252,6 @@ function Transcription() {
 
       audioUrlRef.current = "";
     }
-
-    // --------------------------------------------------------
-    // Create new Blob URL
-    // --------------------------------------------------------
 
     const newAudioUrl =
       URL.createObjectURL(file);
@@ -288,7 +261,6 @@ function Transcription() {
     setAudioFile(file);
     setAudioUrl(newAudioUrl);
 
-    // Reset file input
     event.target.value = "";
   };
 
@@ -299,7 +271,6 @@ function Transcription() {
   const handleRemoveAudio = () => {
     console.log("Removing audio");
 
-    // Stop and clear player FIRST
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -313,7 +284,6 @@ function Transcription() {
       }
     }
 
-    // THEN revoke Blob URL
     if (audioUrlRef.current) {
       URL.revokeObjectURL(
         audioUrlRef.current
@@ -329,10 +299,11 @@ function Transcription() {
     setPlainTranscript("");
     setTranscriptionError("");
 
+    setTaskAssignmentMessage("");
+
     setIsPlaying(false);
     setRecordingTime(0);
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -345,13 +316,10 @@ function Transcription() {
   const startRecording = async () => {
     try {
       setTranscriptionError("");
+      setTaskAssignmentMessage("");
 
       setTranscription([]);
       setPlainTranscript("");
-
-      // ------------------------------------------------------
-      // Browser support
-      // ------------------------------------------------------
 
       if (
         !navigator.mediaDevices ||
@@ -364,20 +332,10 @@ function Transcription() {
         return;
       }
 
-      // ------------------------------------------------------
-      // Microphone permission
-      // ------------------------------------------------------
-
       const stream =
-        await navigator.mediaDevices.getUserMedia(
-          {
-            audio: true,
-          }
-        );
-
-      // ------------------------------------------------------
-      // Find supported MIME type
-      // ------------------------------------------------------
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
 
       let mimeType = "";
 
@@ -408,10 +366,6 @@ function Transcription() {
         mimeType || "browser default"
       );
 
-      // ------------------------------------------------------
-      // Create recorder
-      // ------------------------------------------------------
-
       const mediaRecorder = mimeType
         ? new MediaRecorder(stream, {
             mimeType,
@@ -422,10 +376,6 @@ function Transcription() {
         mediaRecorder;
 
       audioChunksRef.current = [];
-
-      // ------------------------------------------------------
-      // Audio chunks
-      // ------------------------------------------------------
 
       mediaRecorder.ondataavailable = (
         event
@@ -440,17 +390,12 @@ function Transcription() {
         }
       };
 
-      // ------------------------------------------------------
-      // Recording stopped
-      // ------------------------------------------------------
-
       mediaRecorder.onstop = () => {
         try {
           console.log(
             "Recording stopped."
           );
 
-          // Determine actual MIME type
           const actualMimeType =
             mediaRecorder.mimeType ||
             mimeType ||
@@ -460,10 +405,6 @@ function Transcription() {
             "Final recording MIME:",
             actualMimeType
           );
-
-          // --------------------------------------------------
-          // Create Blob
-          // --------------------------------------------------
 
           const audioBlob = new Blob(
             audioChunksRef.current,
@@ -476,10 +417,6 @@ function Transcription() {
             "Recorded blob size:",
             audioBlob.size
           );
-
-          // --------------------------------------------------
-          // Validate blob
-          // --------------------------------------------------
 
           if (audioBlob.size === 0) {
             setTranscriptionError(
@@ -495,10 +432,6 @@ function Transcription() {
             return;
           }
 
-          // --------------------------------------------------
-          // Determine extension
-          // --------------------------------------------------
-
           let extension = "webm";
 
           if (
@@ -510,10 +443,6 @@ function Transcription() {
           ) {
             extension = "wav";
           }
-
-          // --------------------------------------------------
-          // Create File
-          // --------------------------------------------------
 
           const file = new File(
             [audioBlob],
@@ -533,19 +462,11 @@ function Transcription() {
             file.size
           );
 
-          // --------------------------------------------------
-          // Stop microphone
-          // --------------------------------------------------
-
           stream
             .getTracks()
             .forEach((track) =>
               track.stop()
             );
-
-          // --------------------------------------------------
-          // Clear old audio
-          // --------------------------------------------------
 
           if (audioRef.current) {
             try {
@@ -562,10 +483,6 @@ function Transcription() {
             }
           }
 
-          // --------------------------------------------------
-          // Revoke old URL
-          // --------------------------------------------------
-
           if (audioUrlRef.current) {
             URL.revokeObjectURL(
               audioUrlRef.current
@@ -574,10 +491,6 @@ function Transcription() {
             audioUrlRef.current = "";
           }
 
-          // --------------------------------------------------
-          // Create NEW Blob URL
-          // --------------------------------------------------
-
           const newAudioUrl =
             URL.createObjectURL(
               audioBlob
@@ -585,10 +498,6 @@ function Transcription() {
 
           audioUrlRef.current =
             newAudioUrl;
-
-          // --------------------------------------------------
-          // Update state
-          // --------------------------------------------------
 
           setAudioFile(file);
           setAudioUrl(newAudioUrl);
@@ -610,10 +519,6 @@ function Transcription() {
         }
       };
 
-      // ------------------------------------------------------
-      // Recorder error
-      // ------------------------------------------------------
-
       mediaRecorder.onerror = (event) => {
         console.error(
           "MediaRecorder error:",
@@ -631,18 +536,10 @@ function Transcription() {
           );
       };
 
-      // ------------------------------------------------------
-      // Start
-      // ------------------------------------------------------
-
       mediaRecorder.start(1000);
 
       setIsRecording(true);
       setRecordingTime(0);
-
-      // ------------------------------------------------------
-      // Timer
-      // ------------------------------------------------------
 
       if (recordingTimerRef.current) {
         clearInterval(
@@ -763,7 +660,6 @@ function Transcription() {
       event.currentTarget.error
     );
 
-    // Only show this if we actually have an audio file.
     if (audioFile) {
       setTranscriptionError(
         "The audio could not be played. Please try selecting or recording it again."
@@ -771,6 +667,525 @@ function Transcription() {
     }
 
     setIsPlaying(false);
+  };
+
+  // ==========================================================
+  // GET TRANSCRIPT TEXT
+  // ==========================================================
+
+  const getTranscriptText = (
+    data,
+    segments
+  ) => {
+    if (
+      typeof data.transcript ===
+      "string" &&
+      data.transcript.trim()
+    ) {
+      return data.transcript.trim();
+    }
+
+    if (
+      typeof data.text ===
+      "string" &&
+      data.text.trim()
+    ) {
+      return data.text.trim();
+    }
+
+    if (
+      Array.isArray(segments) &&
+      segments.length > 0
+    ) {
+      return segments
+        .map(
+          (segment) =>
+            segment.text ||
+            segment.transcript ||
+            segment.content ||
+            ""
+        )
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    }
+
+    return "";
+  };
+
+  // ==========================================================
+  // CHECK WHETHER TRANSCRIPT IS TASK ASSIGNMENT
+  // ==========================================================
+
+  const isTaskAssignmentRequest = (
+    text
+  ) => {
+    if (!text?.trim()) {
+      return false;
+    }
+
+    const normalized =
+      text.trim().toLowerCase();
+
+    const assignmentPatterns = [
+      /\bassign\b.*\btask\b/,
+      /\bassign\b.*\bto\b/,
+      /\bassign a task\b/,
+      /\bassign the task\b/,
+      /\bassign this task\b/,
+      /\bassign\b.*\bteam member\b/,
+      /\btask\b.*\bassign\b/,
+    ];
+
+    return assignmentPatterns.some(
+      (pattern) =>
+        pattern.test(normalized)
+    );
+  };
+
+  // ==========================================================
+  // NORMALIZE STATUS
+  // ==========================================================
+
+  const normalizeTaskStatus = (
+    status
+  ) => {
+    if (!status) {
+      return "To Do";
+    }
+
+    const normalized = String(status)
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]/g, " ")
+      .replace(/\s+/g, " ");
+
+    if (
+      normalized === "in progress" ||
+      normalized === "inprogress" ||
+      normalized === "progress" ||
+      normalized === "working" ||
+      normalized === "ongoing"
+    ) {
+      return "In Progress";
+    }
+
+    if (
+      normalized === "completed" ||
+      normalized === "complete" ||
+      normalized === "done" ||
+      normalized === "finished"
+    ) {
+      return "Completed";
+    }
+
+    if (
+      normalized === "to do" ||
+      normalized === "todo" ||
+      normalized === "pending" ||
+      normalized === "not started"
+    ) {
+      return "To Do";
+    }
+
+    if (
+      normalized === "blocked"
+    ) {
+      return "Blocked";
+    }
+
+    return status;
+  };
+
+  // ==========================================================
+  // ASSIGN TASK FROM TRANSCRIPT
+  // ==========================================================
+
+  const assignTaskFromTranscript = async (
+    transcriptText
+  ) => {
+    if (!currentProjectId) {
+      console.warn(
+        "No project ID available for task assignment."
+      );
+
+      return;
+    }
+
+    if (!transcriptText?.trim()) {
+      return;
+    }
+
+    if (
+      !isTaskAssignmentRequest(
+        transcriptText
+      )
+    ) {
+      console.log(
+        "Transcript is not a task assignment request."
+      );
+
+      return;
+    }
+
+    const token =
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token");
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      setAssigningTask(true);
+      setTaskAssignmentMessage("");
+
+      console.log(
+        "\n=========================================="
+      );
+      console.log(
+        "VOICE TASK ASSIGNMENT DETECTED"
+      );
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "Transcript:",
+        transcriptText
+      );
+
+      // --------------------------------------------------------
+      // Ask existing AI assistant service to extract task data
+      // --------------------------------------------------------
+
+      const aiResponse =
+        await fetch(
+          "http://localhost:8000/assistant",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization: `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              project_id:
+                currentProjectId,
+
+              question:
+                transcriptText.trim(),
+            }),
+          }
+        );
+
+      let aiData = {};
+
+      try {
+        aiData =
+          await aiResponse.json();
+      } catch {
+        aiData = {};
+      }
+
+      console.log(
+        "AI assignment extraction response:",
+        aiData
+      );
+
+      if (!aiResponse.ok) {
+        throw new Error(
+          aiData?.detail ||
+            aiData?.message ||
+            aiData?.error ||
+            "Unable to understand the task assignment."
+        );
+      }
+
+      // --------------------------------------------------------
+      // Find task assignment in AI response
+      // --------------------------------------------------------
+
+      const taskData =
+        aiData?.task ||
+        aiData?.assign_task ||
+        aiData?.assignment ||
+        aiData?.data?.task ||
+        aiData?.result?.task;
+
+      const action =
+        aiData?.action ||
+        aiData?.intent ||
+        aiData?.result?.action;
+
+      if (
+        action !==
+          "assign_task" ||
+        !taskData
+      ) {
+        console.log(
+          "AI did not detect a valid task assignment."
+        );
+
+        return;
+      }
+
+      const assignedTo =
+        taskData.assigned_to ||
+        taskData.assignedTo ||
+        taskData.member_name ||
+        taskData.memberName ||
+        taskData.recipientName;
+
+      const title =
+        taskData.title ||
+        taskData.task_title ||
+        taskData.taskTitle;
+
+      if (!assignedTo) {
+        throw new Error(
+          "The voice command was detected as a task assignment, but the team member could not be determined."
+        );
+      }
+
+      if (!title) {
+        throw new Error(
+          "The voice command was detected as a task assignment, but the task title could not be determined."
+        );
+      }
+
+      // --------------------------------------------------------
+      // Normalize task values
+      // --------------------------------------------------------
+
+      const priority =
+        taskData.priority ||
+        "Medium";
+
+      const status =
+        normalizeTaskStatus(
+          taskData.status ||
+            "To Do"
+        );
+
+      const dueDate =
+        taskData.due_date ||
+        taskData.dueDate ||
+        null;
+
+      const description =
+        taskData.description ||
+        "";
+
+      console.log(
+        "------------------------------------------"
+      );
+
+      console.log(
+        "Task title:",
+        title
+      );
+
+      console.log(
+        "Assigned to:",
+        assignedTo
+      );
+
+      console.log(
+        "Priority:",
+        priority
+      );
+
+      console.log(
+        "Status:",
+        status
+      );
+
+      console.log(
+        "Due date:",
+        dueDate
+      );
+
+      console.log(
+        "------------------------------------------"
+      );
+
+      // --------------------------------------------------------
+      // Call existing task assignment endpoint
+      // --------------------------------------------------------
+
+      const assignmentResponse =
+        await fetch(
+          `${API_URL}/api/ai-tasks/assign`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization: `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              project_id:
+                currentProjectId,
+
+              title:
+                String(title).trim(),
+
+              description,
+
+              assigned_to:
+                String(
+                  assignedTo
+                ).trim(),
+
+              priority,
+
+              status,
+
+              due_date:
+                dueDate,
+            }),
+          }
+        );
+
+      let assignmentData = {};
+
+      try {
+        assignmentData =
+          await assignmentResponse.json();
+      } catch {
+        assignmentData = {};
+      }
+
+      console.log(
+        "Task assignment response:",
+        assignmentData
+      );
+
+      if (
+        assignmentResponse.status ===
+        401
+      ) {
+        localStorage.removeItem(
+          "token"
+        );
+
+        localStorage.removeItem(
+          "user"
+        );
+
+        sessionStorage.removeItem(
+          "token"
+        );
+
+        sessionStorage.removeItem(
+          "user"
+        );
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      if (
+        !assignmentResponse.ok
+      ) {
+        throw new Error(
+          assignmentData?.error ||
+            assignmentData?.message ||
+            assignmentData?.detail ||
+            "Unable to assign the task."
+        );
+      }
+
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
+      const createdTask =
+        assignmentData.task;
+
+      const assignedMember =
+        assignmentData.assignedMember;
+
+      const emailSent =
+        assignmentData.emailSent;
+
+      console.log(
+        "\n=========================================="
+      );
+
+      console.log(
+        "VOICE TASK ASSIGNMENT SUCCESSFUL"
+      );
+
+      console.log(
+        "Task:",
+        createdTask
+      );
+
+      console.log(
+        "Member:",
+        assignedMember
+      );
+
+      console.log(
+        "Email sent:",
+        emailSent
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+      setTaskAssignmentMessage(
+        emailSent
+          ? `Task "${title}" was assigned to ${assignedMember?.name || assignedTo}. An email notification was sent.`
+          : `Task "${title}" was assigned to ${assignedMember?.name || assignedTo}.`
+      );
+
+      // --------------------------------------------------------
+      // Notify ProjectDetails
+      // --------------------------------------------------------
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "ai-task-created",
+          {
+            detail: {
+              task:
+                createdTask,
+
+              assignedMember:
+                assignedMember,
+
+              emailSent:
+                emailSent,
+            },
+          }
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Voice task assignment error:",
+        error
+      );
+
+      setTaskAssignmentMessage(
+        error.message ||
+          "The task was detected but could not be assigned."
+      );
+    } finally {
+      setAssigningTask(false);
+    }
   };
 
   // ==========================================================
@@ -785,10 +1200,6 @@ function Transcription() {
 
       return;
     }
-
-    // --------------------------------------------------------
-    // Validate file
-    // --------------------------------------------------------
 
     if (audioFile.size === 0) {
       setTranscriptionError(
@@ -825,10 +1236,6 @@ function Transcription() {
       "===================================="
     );
 
-    // --------------------------------------------------------
-    // Get JWT
-    // --------------------------------------------------------
-
     const token =
       localStorage.getItem("token") ||
       sessionStorage.getItem("token");
@@ -845,25 +1252,19 @@ function Transcription() {
       setTranscribing(true);
 
       setTranscriptionError("");
+      setTaskAssignmentMessage("");
 
       setTranscription([]);
       setPlainTranscript("");
 
-      // ------------------------------------------------------
-      // Create FormData
-      // ------------------------------------------------------
-
-      const formData = new FormData();
+      const formData =
+        new FormData();
 
       formData.append(
         "file",
         audioFile,
         audioFile.name
       );
-
-      // ------------------------------------------------------
-      // Project ID
-      // ------------------------------------------------------
 
       if (currentProjectId) {
         formData.append(
@@ -876,28 +1277,19 @@ function Transcription() {
         "FormData created successfully."
       );
 
-      // ------------------------------------------------------
-      // Send request
-      // ------------------------------------------------------
+      const response =
+        await fetch(
+          `${API_URL}/api/transcription/transcribe`,
+          {
+            method: "POST",
 
-      const response = await fetch(
-        `${API_URL}/api/transcription/transcribe`,
-        {
-          method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
 
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-
-          // IMPORTANT:
-          // Do NOT manually set Content-Type.
-          body: formData,
-        }
-      );
-
-      // ------------------------------------------------------
-      // Read response
-      // ------------------------------------------------------
+            body: formData,
+          }
+        );
 
       const responseText =
         await response.text();
@@ -932,11 +1324,10 @@ function Transcription() {
         data
       );
 
-      // ------------------------------------------------------
-      // Unauthorized
-      // ------------------------------------------------------
-
-      if (response.status === 401) {
+      if (
+        response.status ===
+        401
+      ) {
         localStorage.removeItem(
           "token"
         );
@@ -959,10 +1350,6 @@ function Transcription() {
 
         return;
       }
-
-      // ------------------------------------------------------
-      // API error
-      // ------------------------------------------------------
 
       if (!response.ok) {
         throw new Error(
@@ -993,16 +1380,13 @@ function Transcription() {
       // ======================================================
 
       const transcriptText =
-        typeof data.transcript ===
-        "string"
-          ? data.transcript
-          : typeof data.text ===
-            "string"
-          ? data.text
-          : "";
+        getTranscriptText(
+          data,
+          segments
+        );
 
       // ------------------------------------------------------
-      // Save results
+      // SAVE RESULTS
       // ------------------------------------------------------
 
       setTranscription(
@@ -1014,7 +1398,7 @@ function Transcription() {
       );
 
       // ------------------------------------------------------
-      // No result
+      // NO RESULT
       // ------------------------------------------------------
 
       if (
@@ -1030,6 +1414,28 @@ function Transcription() {
 
       console.log(
         "Transcription completed successfully."
+      );
+
+      // ======================================================
+      // VOICE TASK ASSIGNMENT
+      // ======================================================
+
+      /*
+       * The transcription is now complete.
+       *
+       * If the transcript contains something like:
+       *
+       * "Assign a task to Waji Ul Hasaan,
+       *  task title is Build Website,
+       *  status is in progress,
+       *  priority is high,
+       *  deadline is tomorrow"
+       *
+       * the existing AI task-assignment system is called.
+       */
+
+      await assignTaskFromTranscript(
+        transcriptText
       );
     } catch (error) {
       console.error(
@@ -1316,22 +1722,27 @@ function Transcription() {
                         handleTranscribe
                       }
                       disabled={
-                        transcribing
+                        transcribing ||
+                        assigningTask
                       }
                       className="w-full mt-5 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
 
                       {transcribing ? (
                         <>
+
                           <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
 
                           Transcribing...
+
                         </>
                       ) : (
                         <>
+
                           <CheckCircle2 size={16} />
 
                           Transcribe Meeting
+
                         </>
                       )}
 
@@ -1348,6 +1759,32 @@ function Transcription() {
 
                 <div className="mt-4 px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">
                   {transcriptionError}
+                </div>
+
+              )}
+
+              {/* ==================================================
+                  TASK ASSIGNMENT STATUS
+              ================================================== */}
+
+              {assigningTask && (
+
+                <div className="mt-4 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-indigo-700 flex items-center gap-2">
+
+                  <span className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+
+                  Task assignment detected in the voice transcript. Creating task and sending email...
+
+                </div>
+
+              )}
+
+              {taskAssignmentMessage && (
+
+                <div className="mt-4 px-4 py-3 rounded-lg bg-green-50 border border-green-100 text-sm text-green-700">
+
+                  {taskAssignmentMessage}
+
                 </div>
 
               )}
@@ -1380,8 +1817,7 @@ function Transcription() {
                   SPEAKER SEGMENTS
               ================================================== */}
 
-              {transcription.length >
-              0 ? (
+              {transcription.length > 0 ? (
 
                 <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
 
@@ -1454,10 +1890,6 @@ function Transcription() {
 
               ) : plainTranscript ? (
 
-                /* ==================================================
-                   NORMAL WHISPER TRANSCRIPT
-                ================================================== */
-
                 <div className="max-h-[520px] overflow-y-auto">
 
                   <div className="border border-slate-200 rounded-xl p-5">
@@ -1471,10 +1903,6 @@ function Transcription() {
                 </div>
 
               ) : (
-
-                /* ==================================================
-                   EMPTY STATE
-                ================================================== */
 
                 <div className="min-h-[360px] flex flex-col items-center justify-center text-center">
 
@@ -1504,8 +1932,10 @@ function Transcription() {
         </div>
 
       </main>
+
     </div>
   );
 }
 
 export default Transcription;
+
