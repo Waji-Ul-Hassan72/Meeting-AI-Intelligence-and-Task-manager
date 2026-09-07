@@ -354,7 +354,13 @@ function ProjectDetails() {
           ? data.tasks
           : [];
 
-        setTasks(taskList);
+        // IMPORTANT:
+        // Normalize the status when tasks are fetched from the backend.
+        // The AI may return "In Progress", "in progress", or
+        // "in-progress". The UI always stores "in-progress".
+        const normalizedTasks = taskList.map(normalizeTaskForUI);
+
+        setTasks(normalizedTasks);
       } catch (error) {
         console.error(
           "Tasks fetch error:",
@@ -395,6 +401,8 @@ function ProjectDetails() {
         return;
       }
 
+      // Fetch the authoritative task from the backend, then normalize
+      // its status before rendering it.
       fetchTasks(false);
     };
 
@@ -486,18 +494,27 @@ function ProjectDetails() {
   // NORMALIZE STATUS
   // =========================================================
 
+  // =========================================================
+  // NORMALIZE STATUS
+  // =========================================================
+  // Always convert backend/AI status values into the exact
+  // values used by the task UI.
   const normalizeStatus = (status) => {
-    if (!status) return "todo";
+    if (status === null || status === undefined) {
+      return "todo";
+    }
 
     const normalized = String(status)
       .trim()
       .toLowerCase()
-      .replace(/[\_-]/g, " ");
+      .replace(/[_-]+/g, " ")
+      .replace(/\\s+/g, " ");
 
     if (
       normalized === "completed" ||
       normalized === "complete" ||
-      normalized === "done"
+      normalized === "done" ||
+      normalized === "finished"
     ) {
       return "completed";
     }
@@ -505,12 +522,54 @@ function ProjectDetails() {
     if (
       normalized === "in progress" ||
       normalized === "inprogress" ||
-      normalized === "working"
+      normalized === "progress" ||
+      normalized === "working" ||
+      normalized === "ongoing"
     ) {
       return "in-progress";
     }
 
+    if (
+      normalized === "to do" ||
+      normalized === "todo" ||
+      normalized === "pending" ||
+      normalized === "not started" ||
+      normalized === "not-started"
+    ) {
+      return "todo";
+    }
+
+    // Keep the UI safe for unknown values by treating them as To Do.
     return "todo";
+  };
+
+  // Get the status from the different field names that may be returned
+  // by the Node/Python/AI task APIs.
+  const getTaskStatusValue = (task) => {
+    if (!task) return "todo";
+
+    return (
+      task.status ??
+      task.task_status ??
+      task.taskStatus ??
+      task.status_name ??
+      task.statusName ??
+      "todo"
+    );
+  };
+
+  // Normalize every task as soon as it enters React state.
+  // This prevents the board/list UI from receiving a different
+  // status representation from the backend.
+  const normalizeTaskForUI = (task) => {
+    if (!task) return task;
+
+    const rawStatus = getTaskStatusValue(task);
+
+    return {
+      ...task,
+      status: normalizeStatus(rawStatus),
+    };
   };
 
   // =========================================================
@@ -681,7 +740,7 @@ function ProjectDetails() {
     );
 
     setEditFormStatus(
-      normalizeStatus(task.status)
+      normalizeStatus(getTaskStatusValue(task))
     );
 
     const rawDate =
@@ -789,15 +848,16 @@ function ProjectDetails() {
       setTasks((prev) =>
         prev.map((t) =>
           t.id === editingTask.id
-            ? {
+            ? normalizeTaskForUI({
                 ...t,
                 ...data,
                 name: isOwnerOrCreator ? editFormName : t.name,
                 title: isOwnerOrCreator ? editFormName : t.title,
                 description: isOwnerOrCreator ? editFormDesc : t.description,
+                // The value selected in the UI is already canonical.
                 status: editFormStatus,
                 due_date: isOwnerOrCreator ? editFormDueDate : t.due_date,
-              }
+              })
             : t
         )
       );

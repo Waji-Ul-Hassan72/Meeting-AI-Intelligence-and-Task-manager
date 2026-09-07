@@ -109,6 +109,52 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
   };
 
   // ============================================================
+  // NORMALIZE TASK STATUS
+  // ============================================================
+
+  const normalizeTaskStatus = (status) => {
+    const value = String(status || "").trim().toLowerCase();
+
+    if (
+      value === "in progress" ||
+      value === "in-progress" ||
+      value === "in_progress" ||
+      value === "progress"
+    ) {
+      return "In Progress";
+    }
+
+    if (
+      value === "completed" ||
+      value === "complete" ||
+      value === "done"
+    ) {
+      return "Completed";
+    }
+
+    if (
+      value === "pending" ||
+      value === "to do" ||
+      value === "todo" ||
+      value === "to-do"
+    ) {
+      return "To Do";
+    }
+
+    if (value === "blocked") {
+      return "Blocked";
+    }
+
+    // Preserve an already-valid backend status instead of replacing it.
+    if (status) {
+      return String(status).trim();
+    }
+
+    return "To Do";
+  };
+
+
+  // ============================================================
   // ASSIGN TASK THROUGH BACKEND
   // ============================================================
 
@@ -168,8 +214,12 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             priority:
               taskData.priority || "Medium",
 
-            status:
-              taskData.status || "Pending",
+            // Keep the AI-extracted status exactly in the task request.
+            // Normalize common variations so "in progress" always reaches
+            // the backend as "In Progress" instead of falling back to To Do.
+            status: normalizeTaskStatus(
+              taskData.status || "To Do"
+            ),
 
             due_date:
               taskData.due_date ||
@@ -221,12 +271,23 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       setTaskAssignmentError("");
 
       // ========================================================
+      // NORMALIZE CREATED TASK BEFORE SENDING IT TO THE PAGE
+      // ========================================================
+
+      const createdTask = {
+        ...data.task,
+        status: normalizeTaskStatus(
+          data.task?.status || taskData.status || "To Do"
+        ),
+      };
+
+      // ========================================================
       // NOTIFY PARENT PROJECT DETAILS COMPONENT
       // ========================================================
 
       if (typeof onTaskCreated === "function") {
         try {
-          onTaskCreated(data.task);
+          onTaskCreated(createdTask);
         } catch (callbackError) {
           console.error(
             "onTaskCreated callback error:",
@@ -245,7 +306,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       window.dispatchEvent(
         new CustomEvent("ai-task-created", {
           detail: {
-            task: data.task,
+            task: createdTask,
             assignedMember:
               data.assignedMember || null,
             emailSent:
@@ -254,7 +315,10 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         })
       );
 
-      return data;
+      return {
+        ...data,
+        task: createdTask,
+      };
     } catch (error) {
       console.error(
         "AI task assignment error:",
@@ -1530,4 +1594,4 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
     </div>
   );
-}    AIAssistant.jsx
+}

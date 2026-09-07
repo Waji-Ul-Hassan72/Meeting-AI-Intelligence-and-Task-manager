@@ -415,16 +415,25 @@ function ManagerDashboard() {
   // ============================================================
 
   const handleLogout = () => {
+    // Remove authentication data
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("userName");
 
+    // Remove session authentication data if it exists
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("user");
 
-    navigate("/login");
-  };
+    // Remove all AI Assistant chat histories
+    Object.keys(localStorage)
+        .filter((key) => key.startsWith("aiAssistantMessages_"))
+        .forEach((key) => {
+            localStorage.removeItem(key);
+        });
 
+    // Go to login page
+    navigate("/login");
+};
   // ============================================================
   // OPEN PROJECT
   // ============================================================
