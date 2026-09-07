@@ -558,9 +558,7 @@ function ProjectDetails() {
     );
   };
 
-  // Normalize every task as soon as it enters React state.
-  // This prevents the board/list UI from receiving a different
-  // status representation from the backend.
+  
  const normalizeTaskForUI = (task) => {
   if (!task) return task;
 
@@ -576,18 +574,12 @@ function ProjectDetails() {
   return {
     ...task,
 
-    // Keep the original task data
-    // and make sure Calendar always has due_date.
+    
     due_date: rawDueDate,
 
-    // Normalize status for the existing task UI.
     status: normalizeStatus(rawStatus),
   };
 };
-
-  // =========================================================
-  // TASK COUNTS
-  // =========================================================
 
   const taskCounts = useMemo(() => {
     return {
@@ -611,10 +603,6 @@ function ProjectDetails() {
       ).length,
     };
   }, [tasks]);
-
-  // =========================================================
-  // FILTERED TASKS
-  // =========================================================
 
   const filteredTasks = useMemo(() => {
     if (activeTaskStatus === "all") {
@@ -700,27 +688,46 @@ function ProjectDetails() {
   // =========================================================
 
   const formatDate = (date) => {
-    if (!date) return "—";
+  if (!date) return "—";
 
-    const parsedDate = new Date(date);
+  // If backend sends:
+  // 2026-09-28
+  // or
+  // 2026-09-28T00:00:00.000Z
+  // keep the original calendar date.
+  if (typeof date === "string") {
+    const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
 
-    if (
-      Number.isNaN(
-        parsedDate.getTime()
-      )
-    ) {
-      return "—";
-    }
+    if (match) {
+      const [year, month, day] = match[1].split("-");
 
-    return parsedDate.toLocaleDateString(
-      "en-US",
-      {
+      const localDate = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day)
+      );
+
+      return localDate.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
-      }
-    );
-  };
+      });
+    }
+  }
+
+  const parsedDate =
+    date instanceof Date ? date : new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "—";
+  }
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
 
   // =========================================================
   // CREATE TASK
@@ -1220,7 +1227,6 @@ function ProjectDetails() {
 
   {[
     "tasks",
-    "meetings",
     "calendar",
     "transcription",
     ...(isManager ? ["assistant"] : []),
