@@ -148,27 +148,6 @@ function Team() {
           );
         }
 
-        /*
-          Backend may return either:
-
-          [
-            {...},
-            {...}
-          ]
-
-          OR:
-
-          {
-            projects: [...]
-          }
-
-          OR:
-
-          {
-            data: [...]
-          }
-        */
-
         const projectList = Array.isArray(data)
           ? data
           : Array.isArray(data?.projects)
@@ -255,18 +234,6 @@ function Team() {
         setLoadingMembers(true);
         setErrorMessage("");
 
-        /*
-          IMPORTANT:
-
-          Do NOT use:
-
-              /api/teams
-
-          Instead fetch members for the selected project:
-
-              /api/projects/:projectId/members
-        */
-
         const response = await fetch(
           `${API_URL}/api/projects/${selectedProject}/members`,
           {
@@ -299,33 +266,6 @@ function Team() {
           );
         }
 
-        /*
-          Backend may return:
-
-          [
-            {...},
-            {...}
-          ]
-
-          OR:
-
-          {
-            members: [...]
-          }
-
-          OR:
-
-          {
-            team: [...]
-          }
-
-          OR:
-
-          {
-            data: [...]
-          }
-        */
-
         const memberList = Array.isArray(data)
           ? data
           : Array.isArray(data?.members)
@@ -341,11 +281,6 @@ function Team() {
         if (cancelled) {
           return;
         }
-
-        /*
-          Make sure each member has project_id
-          available to the UI.
-        */
 
         const normalizedMembers =
           memberList.map((member) => ({
@@ -468,43 +403,20 @@ function Team() {
         );
       }
 
-      // ========================================================
-      // EXISTING USER
-      // ========================================================
-
       if (data?.type === "existing_user") {
         setSuccessMessage(
           data?.message ||
             "Team member added successfully."
         );
 
-        /*
-          Instead of relying only on the response.member,
-          fetch the project members again.
-
-          This guarantees the UI matches the database.
-        */
-
         await refreshMembers();
 
-      }
-
-      // ========================================================
-      // NEW USER / INVITATION
-      // ========================================================
-
-      else if (data?.type === "invitation") {
+      } else if (data?.type === "invitation") {
         setSuccessMessage(
           data?.message ||
             `Invitation sent to ${email}.`
         );
-      }
-
-      // ========================================================
-      // GENERIC SUCCESS
-      // ========================================================
-
-      else {
+      } else {
         setSuccessMessage(
           data?.message ||
             "Team member operation completed successfully."
@@ -720,11 +632,11 @@ function Team() {
 
   if (loadingProjects) {
     return (
-      <div className="min-h-screen bg-[#f7f9fb] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-9 h-9 border-2 border-slate-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-3" />
 
-          <p className="text-sm font-semibold text-slate-500">
+          <p className="text-sm font-medium text-slate-600">
             Loading team workspace...
           </p>
         </div>
@@ -747,81 +659,65 @@ function Team() {
   // ============================================================
 
   return (
-    <div className="min-h-screen bg-[#f7f9fb] text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
 
       {/* ======================================================
           HEADER
       ====================================================== */}
 
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
-
-        <div className="flex items-center gap-3">
-
-          <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-black">
-            AI
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-purple-500/20">
+              AI
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">
+                Meeting Intelligence
+              </h1>
+              <p className="text-xs text-slate-500 font-medium">
+                Team Management
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h1 className="text-sm font-extrabold text-slate-900">
-              Meeting Intelligence
-            </h1>
-
-            <p className="text-[10px] text-slate-400">
-              Team Management
-            </p>
-          </div>
-
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/manager-dashboard")
+            }
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all shadow-2xs"
+          >
+            <span>←</span> Dashboard
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            navigate("/manager-dashboard")
-          }
-          className="text-xs font-semibold text-slate-400 hover:text-slate-700 transition"
-        >
-          ← Dashboard
-        </button>
-
       </header>
 
       {/* ======================================================
           MAIN
       ====================================================== */}
 
-      <main className="max-w-7xl mx-auto px-5 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* ====================================================
             PAGE HEADER
         ==================================================== */}
 
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-8">
-
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-
-            <p className="text-[10px] font-bold uppercase tracking-wider text-teal-600 mb-1">
-              Team Workspace
-            </p>
-
-            <h2 className="text-2xl font-extrabold text-slate-900">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
               Manage your team
             </h2>
-
             <p className="text-sm text-slate-500 mt-1">
-              Add members to your projects and manage
-              project access.
+              Add members to your projects and manage project access.
             </p>
-
           </div>
 
           {/* PROJECT SELECTOR */}
-
-          <div className="w-full lg:w-72">
-
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+          <div className="w-full md:w-72">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Select Project
             </label>
-
             <select
               value={selectedProject}
               onChange={(e) => {
@@ -830,16 +726,14 @@ function Team() {
                 setErrorMessage("");
                 setSuccessMessage("");
               }}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
             >
-
               {projects.length === 0 ? (
                 <option value="">
                   No projects available
                 </option>
               ) : (
                 projects.map((project) => {
-
                   const projectId =
                     getProjectId(project);
 
@@ -853,11 +747,8 @@ function Team() {
                   );
                 })
               )}
-
             </select>
-
           </div>
-
         </div>
 
         {/* ====================================================
@@ -865,27 +756,20 @@ function Team() {
         ==================================================== */}
 
         {errorMessage && (
-          <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start justify-between gap-4">
-
-            <span>
-              {errorMessage}
-            </span>
-
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start justify-between gap-4 shadow-2xs">
+            <span>{errorMessage}</span>
             <button
               type="button"
-              onClick={() =>
-                setErrorMessage("")
-              }
-              className="text-red-400 hover:text-red-700"
+              onClick={() => setErrorMessage("")}
+              className="text-red-400 hover:text-red-700 font-bold"
             >
               ✕
             </button>
-
           </div>
         )}
 
         {successMessage && (
-          <div className="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 shadow-2xs">
             ✓ {successMessage}
           </div>
         )}
@@ -895,24 +779,18 @@ function Team() {
         ==================================================== */}
 
         {selectedProjectData && (
-          <div className="mb-5 bg-white border border-slate-200 rounded-2xl px-6 py-5">
-
-            <p className="text-[10px] uppercase tracking-wider font-bold text-teal-600">
-              Selected Project
-            </p>
-
-            <h3 className="text-lg font-extrabold text-slate-900 mt-1">
-              {getProjectName(
-                selectedProjectData
-              )}
+          <div className="mb-6 bg-white border border-slate-200 rounded-xl shadow-xs p-5">
+            <span className="inline-block px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold mb-2">
+              Active Project
+            </span>
+            <h3 className="text-base font-bold text-slate-900">
+              {getProjectName(selectedProjectData)}
             </h3>
-
             {selectedProjectData.description && (
               <p className="text-xs text-slate-500 mt-1">
                 {selectedProjectData.description}
               </p>
             )}
-
           </div>
         )}
 
@@ -920,22 +798,17 @@ function Team() {
             TEAM MEMBERS
         ==================================================== */}
 
-        <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <section className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
 
           {/* HEADER */}
-
-          <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-
+          <div className="px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-
-              <h3 className="text-base font-extrabold text-slate-900">
+              <h3 className="text-sm font-bold text-slate-900">
                 Team Members
               </h3>
-
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-0.5">
                 People who have access to this project.
               </p>
-
             </div>
 
             <button
@@ -946,44 +819,31 @@ function Team() {
                 setSuccessMessage("");
               }}
               disabled={!selectedProject}
-              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition disabled:opacity-40"
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 transition shadow-2xs disabled:opacity-40 cursor-pointer"
             >
               + Add Team Member
             </button>
-
           </div>
 
-          {/* MEMBERS */}
-
+          {/* MEMBERS LIST */}
           {loadingMembers ? (
-
             <div className="p-12 text-center">
-
-              <div className="w-7 h-7 border-2 border-slate-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-3" />
-
-              <p className="text-xs font-semibold text-slate-400">
+              <div className="w-7 h-7 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs font-medium text-slate-500">
                 Loading team members...
               </p>
-
             </div>
-
           ) : members.length === 0 ? (
-
             <div className="p-12 text-center">
-
-              <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl font-bold mx-auto mb-4">
+              <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-lg font-bold mx-auto mb-3">
                 +
               </div>
-
-              <h4 className="text-sm font-extrabold text-slate-800">
+              <h4 className="text-sm font-bold text-slate-900">
                 No team members yet
               </h4>
-
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-2 mb-5">
-                Add developers or other team members
-                to give them access to this project.
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                Add developers or other team members to give them access to this project.
               </p>
-
               <button
                 type="button"
                 onClick={() => {
@@ -992,95 +852,62 @@ function Team() {
                   setSuccessMessage("");
                 }}
                 disabled={!selectedProject}
-                className="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-xs font-bold hover:bg-teal-700 disabled:opacity-40"
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 transition shadow-2xs disabled:opacity-40 cursor-pointer"
               >
                 Add First Member
               </button>
-
             </div>
-
           ) : (
-
-            <div className="divide-y divide-slate-100">
-
+            <div className="divide-y divide-slate-200">
               {members.map((member) => {
-
-                const memberName =
-                  getMemberName(member);
-
+                const memberName = getMemberName(member);
                 const memberEmail =
-                  member?.email ||
-                  "No email available";
-
-                const memberId =
-                  getMemberId(member);
+                  member?.email || "No email available";
+                const memberId = getMemberId(member);
 
                 return (
                   <div
                     key={memberId}
-                    className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition"
+                    className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition"
                   >
-
                     {/* MEMBER INFO */}
-
-                    <div className="flex items-center gap-4 min-w-0">
-
-                      <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-extrabold shrink-0">
-                        {memberName
-                          .charAt(0)
-                          .toUpperCase()}
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold shrink-0">
+                        {memberName.charAt(0).toUpperCase()}
                       </div>
-
                       <div className="min-w-0">
-
-                        <p className="text-sm font-bold text-slate-800 truncate">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
                           {memberName}
                         </p>
-
-                        <p className="text-xs text-slate-400 truncate">
+                        <p className="text-xs text-slate-500 truncate">
                           {memberEmail}
                         </p>
-
                       </div>
-
                     </div>
 
                     {/* ROLE + REMOVE */}
-
-                    <div className="flex items-center gap-4 shrink-0">
-
-                      <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold">
-                        {member?.role ||
-                          "Developer"}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold">
+                        {member?.role || "Developer"}
                       </span>
 
                       <button
                         type="button"
                         onClick={() =>
-                          handleRemoveMember(
-                            memberId
-                          )
+                          handleRemoveMember(memberId)
                         }
-                        disabled={
-                          removingMember ===
-                          memberId
-                        }
-                        className="text-xs font-semibold text-slate-400 hover:text-red-600 transition disabled:opacity-40"
+                        disabled={removingMember === memberId}
+                        className="text-xs font-semibold text-red-600 hover:text-red-700 transition disabled:opacity-40 cursor-pointer"
                       >
-                        {removingMember ===
-                        memberId
+                        {removingMember === memberId
                           ? "Removing..."
                           : "Remove"}
                       </button>
-
                     </div>
-
                   </div>
                 );
               })}
-
             </div>
-
           )}
 
         </section>
@@ -1092,30 +919,18 @@ function Team() {
       ====================================================== */}
 
       {showAddMember && (
-
-        <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-5">
-
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
 
             {/* HEADER */}
-
-            <div className="p-6 border-b border-slate-100 flex items-start justify-between">
-
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-
-                <p className="text-[10px] uppercase tracking-wider font-bold text-teal-600">
-                  Team Management
-                </p>
-
-                <h3 className="text-lg font-extrabold text-slate-900 mt-1">
+                <h3 className="text-sm font-bold text-slate-900">
                   Add Team Member
                 </h3>
-
-                <p className="text-xs text-slate-400 mt-1">
-                  Enter an email to add an existing user
-                  or send them an invitation.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Enter an email to add an existing user or send them an invitation.
                 </p>
-
               </div>
 
               <button
@@ -1126,70 +941,51 @@ function Team() {
                     setMemberEmail("");
                   }
                 }}
-                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"
+                className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold transition"
               >
                 ✕
               </button>
-
             </div>
 
             {/* FORM */}
-
             <form
               onSubmit={handleAddMember}
-              className="p-6 space-y-5"
+              className="p-6 space-y-4"
             >
-
               <div>
-
-                <label className="block text-xs font-bold text-slate-700 mb-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Member Email
                 </label>
-
                 <input
                   type="email"
                   value={memberEmail}
                   onChange={(e) =>
-                    setMemberEmail(
-                      e.target.value
-                    )
+                    setMemberEmail(e.target.value)
                   }
                   placeholder="developer@example.com"
                   autoFocus
                   disabled={addingMember}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 disabled:opacity-50"
                 />
-
-                <p className="text-[10px] text-slate-400 mt-2">
-                  If the user has an account, they will
-                  be added directly. Otherwise, an
-                  invitation will be sent.
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  If the user has an account, they will be added directly. Otherwise, an invitation will be sent.
                 </p>
-
               </div>
 
               {/* PROJECT */}
-
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                   Adding to
                 </p>
-
-                <p className="text-xs font-bold text-slate-800 mt-1">
+                <p className="text-xs font-semibold text-slate-800 mt-0.5">
                   {selectedProjectData
-                    ? getProjectName(
-                        selectedProjectData
-                      )
+                    ? getProjectName(selectedProjectData)
                     : "Selected Project"}
                 </p>
-
               </div>
 
               {/* BUTTONS */}
-
-              <div className="flex gap-3 pt-1">
-
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1198,7 +994,7 @@ function Team() {
                     setErrorMessage("");
                   }}
                   disabled={addingMember}
-                  className="flex-1 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1210,21 +1006,15 @@ function Team() {
                     !memberEmail.trim() ||
                     !selectedProject
                   }
-                  className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-lg bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 transition shadow-2xs disabled:opacity-50 cursor-pointer"
                 >
-                  {addingMember
-                    ? "Processing..."
-                    : "Add Member"}
+                  {addingMember ? "Processing..." : "Add Member"}
                 </button>
-
               </div>
-
             </form>
 
           </div>
-
         </div>
-
       )}
 
     </div>

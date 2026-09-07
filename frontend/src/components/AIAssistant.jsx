@@ -145,7 +145,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       return "Blocked";
     }
 
-    // Preserve an already-valid backend status instead of replacing it.
     if (status) {
       return String(status).trim();
     }
@@ -187,10 +186,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         );
       }
 
-      // ========================================================
-      // SEND TASK TO NODE BACKEND
-      // ========================================================
-
       const response = await fetch(
         "http://localhost:3000/api/ai-tasks/assign",
         {
@@ -214,9 +209,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             priority:
               taskData.priority || "Medium",
 
-            // Keep the AI-extracted status exactly in the task request.
-            // Normalize common variations so "in progress" always reaches
-            // the backend as "In Progress" instead of falling back to To Do.
             status: normalizeTaskStatus(
               taskData.status || "To Do"
             ),
@@ -229,10 +221,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         }
       );
 
-      // ========================================================
-      // READ RESPONSE SAFELY
-      // ========================================================
-
       let data = null;
 
       try {
@@ -240,10 +228,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       } catch {
         data = null;
       }
-
-      // ========================================================
-      // HANDLE BACKEND ERROR
-      // ========================================================
 
       if (!response.ok) {
         throw new Error(
@@ -254,25 +238,13 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         );
       }
 
-      // ========================================================
-      // VALIDATE CREATED TASK
-      // ========================================================
-
       if (!data?.task) {
         throw new Error(
           "Task assignment succeeded, but the created task was not returned."
         );
       }
 
-      // ========================================================
-      // CLEAR ERROR AFTER SUCCESS
-      // ========================================================
-
       setTaskAssignmentError("");
-
-      // ========================================================
-      // NORMALIZE CREATED TASK BEFORE SENDING IT TO THE PAGE
-      // ========================================================
 
       const createdTask = {
         ...data.task,
@@ -280,10 +252,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
           data.task?.status || taskData.status || "To Do"
         ),
       };
-
-      // ========================================================
-      // NOTIFY PARENT PROJECT DETAILS COMPONENT
-      // ========================================================
 
       if (typeof onTaskCreated === "function") {
         try {
@@ -295,13 +263,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
           );
         }
       }
-
-      // ========================================================
-      // GLOBAL EVENT
-      //
-      // This allows ProjectDetails to refresh its task list
-      // without requiring a prop.
-      // ========================================================
 
       window.dispatchEvent(
         new CustomEvent("ai-task-created", {
@@ -345,35 +306,12 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       return null;
     }
 
-    // ----------------------------------------------------------
-    // Format 1:
-    //
-    // {
-    //   action: "assign_task",
-    //   task: {
-    //      title: "...",
-    //      assigned_to: "Ali"
-    //   }
-    // }
-    // ----------------------------------------------------------
-
     if (
       result.action === "assign_task" &&
       result.task
     ) {
       return result.task;
     }
-
-    // ----------------------------------------------------------
-    // Format 2:
-    //
-    // {
-    //   action: "assign_task",
-    //   assign_task: {
-    //      ...
-    //   }
-    // }
-    // ----------------------------------------------------------
 
     if (
       result.action === "assign_task" &&
@@ -382,57 +320,17 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       return result.assign_task;
     }
 
-    // ----------------------------------------------------------
-    // Format 3:
-    //
-    // {
-    //   assign_task: {
-    //      ...
-    //   }
-    // }
-    // ----------------------------------------------------------
-
     if (result.assign_task) {
       return result.assign_task;
     }
-
-    // ----------------------------------------------------------
-    // Format 4:
-    //
-    // {
-    //   assignTask: {
-    //      ...
-    //   }
-    // }
-    // ----------------------------------------------------------
 
     if (result.assignTask) {
       return result.assignTask;
     }
 
-    // ----------------------------------------------------------
-    // Format 5:
-    //
-    // {
-    //   taskAssignment: {
-    //      ...
-    //   }
-    // }
-    // ----------------------------------------------------------
-
     if (result.taskAssignment) {
       return result.taskAssignment;
     }
-
-    // ----------------------------------------------------------
-    // Format 6:
-    //
-    // {
-    //   task_assignment: {
-    //      ...
-    //   }
-    // }
-    // ----------------------------------------------------------
 
     if (result.task_assignment) {
       return result.task_assignment;
@@ -465,10 +363,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       setEmailError("");
       setTaskAssignmentError("");
 
-      // ========================================================
-      // ADD USER QUESTION TO CHAT
-      // ========================================================
-
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -478,10 +372,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       ]);
 
       setQuestion("");
-
-      // ========================================================
-      // ASK AI
-      // ========================================================
 
       const result = await askAIAssistant(
         projectId,
@@ -493,10 +383,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         result
       );
 
-      // ========================================================
-      // TASK ASSIGNMENT
-      // ========================================================
-
       const isAssignmentRequest =
         result?.action === "assign_task" ||
         Boolean(
@@ -505,23 +391,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             result?.taskAssignment ||
             result?.task_assignment
         );
-
-      // --------------------------------------------------------
-      // Assignment request detected but Python could not
-      // extract a valid task.
-      //
-      // Example:
-      //
-      // "Assign a task"
-      //
-      // Python may return:
-      //
-      // {
-      //   success: false,
-      //   action: "assign_task",
-      //   message: "Please specify..."
-      // }
-      // --------------------------------------------------------
 
       if (
         isAssignmentRequest &&
@@ -546,10 +415,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
         return;
       }
-
-      // --------------------------------------------------------
-      // Valid assignment request
-      // --------------------------------------------------------
 
       const taskAssignment =
         getTaskAssignmentFromResult(result);
@@ -616,18 +481,8 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
           ]);
         }
 
-        // --------------------------------------------------------
-        // This was a task-assignment request.
-        //
-        // Do NOT process an email draft from the same response.
-        // --------------------------------------------------------
-
         return;
       }
-
-      // ========================================================
-      // NORMAL AI RESPONSE
-      // ========================================================
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -638,10 +493,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             "I could not generate an answer.",
         },
       ]);
-
-      // ========================================================
-      // EMAIL DRAFT
-      // ========================================================
 
       const generatedEmail =
         result?.email ||
@@ -925,10 +776,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
       let approvedDraft = emailDraft;
 
-      // --------------------------------------------------------
-      // Approve the draft first if it is still a draft
-      // --------------------------------------------------------
-
       if (
         emailDraft.status === "draft"
       ) {
@@ -975,10 +822,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
         );
       }
 
-      // --------------------------------------------------------
-      // Email must be approved before sending
-      // --------------------------------------------------------
-
       if (
         approvedDraft.status !==
         "approved"
@@ -987,10 +830,6 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
           "Email must be approved before sending."
         );
       }
-
-      // --------------------------------------------------------
-      // Send approved email
-      // --------------------------------------------------------
 
       const sendResponse =
         await fetch(
@@ -1105,17 +944,17 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
   // ============================================================
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-purple-100 rounded-2xl shadow-sm overflow-hidden font-sans">
 
       {/* ======================================================
           HEADER
       ======================================================= */}
 
-      <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
+      <div className="px-5 py-4 border-b border-purple-100 bg-purple-50/50">
 
         <div className="flex items-center gap-3">
 
-          <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center font-black shadow-sm">
             AI
           </div>
 
@@ -1125,7 +964,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
               AI Project Assistant
             </h2>
 
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-[10px] text-purple-700 font-medium mt-0.5">
               Ask about your project, tasks, team or emails.
             </p>
 
@@ -1149,34 +988,34 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             <div className="text-center max-w-md">
 
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg font-bold mb-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center text-sm font-black mb-3 shadow-sm">
                 AI
               </div>
 
-              <h3 className="text-sm font-bold text-slate-800">
+              <h3 className="text-sm font-bold text-slate-900">
                 How can I help?
               </h3>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Ask about project tasks, team members,
                 assignments or send an email.
               </p>
 
               <div className="mt-4 space-y-2">
 
-                <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                <div className="text-xs bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
                   "How many tasks are pending?"
                 </div>
 
-                <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                <div className="text-xs bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
                   "Which tasks are assigned to Ali?"
                 </div>
 
-                <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                <div className="text-xs bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
                   "Assign login API task to Ali."
                 </div>
 
-                <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                <div className="text-xs bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
                   "Send an email to Ali about his task."
                 </div>
 
@@ -1203,10 +1042,10 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             >
 
               <div
-                className={`max-w-[80%] px-4 py-3 rounded-2xl text-xs leading-5 ${
+                className={`max-w-[80%] px-4 py-3 rounded-2xl text-xs leading-relaxed ${
                   message.role === "user"
-                    ? "bg-slate-900 text-white rounded-br-md"
-                    : "bg-slate-100 text-slate-700 rounded-bl-md"
+                    ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-br-sm shadow-sm"
+                    : "bg-purple-50/60 border border-purple-100 text-slate-800 rounded-bl-sm font-medium"
                 }`}
               >
                 {message.content}
@@ -1223,14 +1062,14 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
           <div className="flex justify-start">
 
-            <div className="bg-slate-100 rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-bl-sm px-4 py-3">
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
 
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" />
 
                 <span
-                  className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
+                  className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce"
                   style={{
                     animationDelay:
                       "0.15s",
@@ -1238,7 +1077,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                 />
 
                 <span
-                  className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
+                  className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce"
                   style={{
                     animationDelay:
                       "0.3s",
@@ -1259,13 +1098,13 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
         {taskAssignmentLoading && (
 
-          <div className="mt-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <div className="mt-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
 
             <div className="flex items-center gap-2">
 
-              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-purple-400 border-t-purple-700 rounded-full animate-spin" />
 
-              <span className="text-xs text-blue-700 font-semibold">
+              <span className="text-xs text-purple-700 font-semibold">
                 Creating task and sending assignment email...
               </span>
 
@@ -1281,7 +1120,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
         {taskAssignmentError && (
 
-          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-800">
             {taskAssignmentError}
           </div>
 
@@ -1293,25 +1132,25 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
         {emailDraft && (
 
-          <div className="mt-4 border border-teal-200 bg-teal-50 rounded-2xl p-4">
+          <div className="mt-4 border border-purple-200 bg-purple-50/40 rounded-2xl p-4 shadow-sm">
 
             {/* Email Header */}
 
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-purple-100">
 
               <div>
 
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 className="text-xs font-extrabold text-slate-900">
                   Email Draft
                 </h3>
 
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
                   Review the email before sending.
                 </p>
 
               </div>
 
-              <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-[10px] font-semibold text-slate-600">
+              <span className="px-2.5 py-1 rounded-full bg-white border border-purple-200 text-[10px] font-bold text-purple-700">
                 {emailDraft.status}
               </span>
 
@@ -1321,7 +1160,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             {emailError && (
 
-              <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+              <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-800">
                 {emailError}
               </div>
 
@@ -1331,7 +1170,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             <div className="mb-3">
 
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Recipient Name
               </label>
 
@@ -1352,7 +1191,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                   emailDraft.status !==
                     "draft"
                 }
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
+                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 disabled:bg-slate-100 transition"
               />
 
             </div>
@@ -1361,7 +1200,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             <div className="mb-3">
 
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Recipient Email
               </label>
 
@@ -1382,7 +1221,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                   emailDraft.status !==
                     "draft"
                 }
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
+                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 disabled:bg-slate-100 transition"
               />
 
             </div>
@@ -1391,7 +1230,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             <div className="mb-3">
 
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Subject
               </label>
 
@@ -1412,7 +1251,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                   emailDraft.status !==
                     "draft"
                 }
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 disabled:bg-slate-100"
+                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 disabled:bg-slate-100 transition"
               />
 
             </div>
@@ -1421,7 +1260,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             <div className="mb-4">
 
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Message
               </label>
 
@@ -1441,8 +1280,8 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                   emailDraft.status !==
                     "draft"
                 }
-                rows={6}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 resize-none disabled:bg-slate-100"
+                rows={5}
+                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 resize-none disabled:bg-slate-100 transition"
               />
 
             </div>
@@ -1460,7 +1299,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                     handleUpdateEmailDraft
                   }
                   disabled={emailLoading}
-                  className="flex-1 px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 disabled:opacity-50"
+                  className="flex-1 px-3 py-2.5 bg-white border border-purple-200 text-purple-700 rounded-xl text-xs font-bold hover:bg-purple-50 disabled:opacity-50 transition shadow-sm"
                 >
                   {emailLoading
                     ? "Updating..."
@@ -1473,12 +1312,21 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                     handleApproveEmail
                   }
                   disabled={emailLoading}
-                  className="flex-1 px-3 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 disabled:opacity-50"
+                  className="flex-1 px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition shadow-md shadow-purple-500/20"
                 >
                   {emailLoading
                     ? "Approving..."
                     : "Approve Email"}
                 </button>
+
+              </div>
+
+            )}
+
+            {emailDraft.status ===
+              "approved" && (
+
+              <div className="flex gap-2">
 
                 <button
                   type="button"
@@ -1486,7 +1334,7 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
                     handleSendEmail
                   }
                   disabled={emailLoading}
-                  className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:opacity-50"
+                  className="w-full px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition shadow-md shadow-purple-500/20"
                 >
                   {emailLoading
                     ? "Sending..."
@@ -1497,37 +1345,16 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
 
             )}
 
-            {/* Approved Actions */}
+          </div>
 
-            {emailDraft.status ===
-              "approved" && (
+        )}
 
-              <button
-                type="button"
-                onClick={
-                  handleSendEmail
-                }
-                disabled={emailLoading}
-                className="w-full px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:opacity-50"
-              >
-                {emailLoading
-                  ? "Sending..."
-                  : "Send Email"}
-              </button>
+        {/* Global Error */}
 
-            )}
+        {error && (
 
-            {/* Sent Message */}
-
-            {emailDraft.status ===
-              "sent" && (
-
-              <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs font-semibold text-green-700 text-center">
-                Email sent successfully.
-              </div>
-
-            )}
-
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-800">
+            {error}
           </div>
 
         )}
@@ -1535,27 +1362,15 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
       </div>
 
       {/* ======================================================
-          GENERAL ERROR
+          INPUT BAR
       ======================================================= */}
 
-      {error && (
+      <div className="p-4 border-t border-purple-100 bg-purple-50/30">
 
-        <div className="mx-5 mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
-          {error}
-        </div>
-
-      )}
-
-      {/* ======================================================
-          INPUT
-      ======================================================= */}
-
-      <form
-        onSubmit={handleAskAI}
-        className="p-4 border-t border-slate-200"
-      >
-
-        <div className="flex items-center gap-2">
+        <form
+          onSubmit={handleAskAI}
+          className="flex items-center gap-2"
+        >
 
           <input
             type="text"
@@ -1563,34 +1378,24 @@ export default function AIAssistant({ projectId, onTaskCreated }) {
             onChange={(e) =>
               setQuestion(e.target.value)
             }
-            placeholder="Ask about your project or email a member..."
-            disabled={
-              loading ||
-              taskAssignmentLoading
-            }
-            className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-teal-500 disabled:opacity-50"
+            placeholder="Ask AI assistant or assign task..."
+            disabled={loading}
+            className="flex-1 px-4 py-2.5 bg-white border border-purple-200 rounded-xl text-xs text-slate-900 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 disabled:opacity-50 transition shadow-sm"
           />
 
           <button
             type="submit"
             disabled={
-              loading ||
-              taskAssignmentLoading ||
-              !question.trim() ||
-              !projectId
+              loading || !question.trim()
             }
-            className="px-5 py-3 bg-teal-600 text-white rounded-xl text-xs font-bold hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition shadow-md shadow-purple-500/20 shrink-0"
           >
-            {loading
-              ? "Thinking..."
-              : taskAssignmentLoading
-              ? "Assigning..."
-              : "Ask"}
+            {loading ? "Thinking..." : "Ask AI"}
           </button>
 
-        </div>
+        </form>
 
-      </form>
+      </div>
 
     </div>
   );

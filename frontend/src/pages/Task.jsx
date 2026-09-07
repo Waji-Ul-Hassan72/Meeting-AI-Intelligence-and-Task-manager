@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createTask } from "../services/api";
@@ -75,12 +74,6 @@ function Task() {
 
   // ============================================================
   // FETCH PROJECT MEMBERS
-  //
-  // Both owner and project members can VIEW the team.
-  //
-  // IMPORTANT:
-  // Permission to CREATE a task is still enforced by the
-  // backend task controller.
   // ============================================================
 
   useEffect(() => {
@@ -121,18 +114,10 @@ function Task() {
           data = {};
         }
 
-        // ------------------------------------------------------
-        // AUTHENTICATION
-        // ------------------------------------------------------
-
         if (response.status === 401) {
           handleUnauthorized();
           return;
         }
-
-        // ------------------------------------------------------
-        // FORBIDDEN
-        // ------------------------------------------------------
 
         if (response.status === 403) {
           throw new Error(
@@ -142,10 +127,6 @@ function Task() {
           );
         }
 
-        // ------------------------------------------------------
-        // OTHER ERRORS
-        // ------------------------------------------------------
-
         if (!response.ok) {
           throw new Error(
             data.message ||
@@ -153,15 +134,6 @@ function Task() {
               "Unable to load project members."
           );
         }
-
-        // ------------------------------------------------------
-        // RESPONSE
-        // Backend returns:
-        //
-        // {
-        //   members: [...]
-        // }
-        // ------------------------------------------------------
 
         const projectMembers = Array.isArray(data)
           ? data
@@ -202,8 +174,7 @@ function Task() {
       return;
     }
 
-    // Maximum 10 MB
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 10 * 1024 * 1024; // 10 MB
 
     if (file.size > maxSize) {
       setErrorMessage(
@@ -241,10 +212,6 @@ function Task() {
 
     setErrorMessage("");
 
-    // ----------------------------------------------------------
-    // VALIDATION
-    // ----------------------------------------------------------
-
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
 
@@ -270,13 +237,6 @@ function Task() {
       return;
     }
 
-    // ----------------------------------------------------------
-    // VALIDATE ASSIGNEE
-    //
-    // Make sure the selected user actually exists in the
-    // project members returned by the backend.
-    // ----------------------------------------------------------
-
     const selectedMember = members.find(
       (member) =>
         String(member.id) === String(assignedTo)
@@ -299,69 +259,21 @@ function Task() {
     setLoading(true);
 
     try {
-      // --------------------------------------------------------
-      // FORM DATA
-      // --------------------------------------------------------
-
       const formData = new FormData();
 
-      formData.append(
-        "title",
-        trimmedTitle
-      );
-
-      formData.append(
-        "description",
-        trimmedDesc
-      );
-
-      formData.append(
-        "priority",
-        priority
-      );
-
-      formData.append(
-        "status",
-        status
-      );
-
-      formData.append(
-        "due_date",
-        dueDate || ""
-      );
-
-      formData.append(
-        "project_id",
-        String(projectId)
-      );
-
-      formData.append(
-        "assigned_to",
-        String(assignedTo)
-      );
-
-      // --------------------------------------------------------
-      // OPTIONAL ATTACHMENT
-      // --------------------------------------------------------
+      formData.append("title", trimmedTitle);
+      formData.append("description", trimmedDesc);
+      formData.append("priority", priority);
+      formData.append("status", status);
+      formData.append("due_date", dueDate || "");
+      formData.append("project_id", String(projectId));
+      formData.append("assigned_to", String(assignedTo));
 
       if (attachment) {
-        formData.append(
-          "attachment",
-          attachment
-        );
+        formData.append("attachment", attachment);
       }
 
-      // --------------------------------------------------------
-      // CREATE TASK
-      //
-      // createTask() should send the JWT token and FormData.
-      // --------------------------------------------------------
-
       await createTask(formData);
-
-      // --------------------------------------------------------
-      // SUCCESS
-      // --------------------------------------------------------
 
       navigate(-1);
 
@@ -371,10 +283,6 @@ function Task() {
         error
       );
 
-      // --------------------------------------------------------
-      // HANDLE 401
-      // --------------------------------------------------------
-
       if (
         error?.response?.status === 401 ||
         error?.status === 401
@@ -382,12 +290,6 @@ function Task() {
         handleUnauthorized();
         return;
       }
-
-      // --------------------------------------------------------
-      // HANDLE 403
-      //
-      // Backend can reject a member trying to create a task.
-      // --------------------------------------------------------
 
       if (
         error?.response?.status === 403 ||
@@ -441,40 +343,31 @@ function Task() {
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-sans overflow-y-auto">
-
-      <div className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-2xl">
-
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-purple-200 p-6 sm:p-7">
+        
         {/* ======================================================
             HEADER
         ====================================================== */}
 
-        <div className="flex items-start justify-between mb-4">
-
+        <div className="flex items-center justify-between pb-4 mb-5 border-b border-purple-100">
           <div>
-
-            <span className="inline-block px-2.5 py-0.5 mb-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100 text-[10px] font-bold uppercase tracking-wider">
-              New Task
-            </span>
-
-            <h1 className="text-xl font-bold text-slate-900">
+            <h2 className="text-lg font-bold text-slate-900">
               Create Project Task
-            </h1>
-
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Organize your execution schedule and details.
             </p>
-
           </div>
 
           <button
             type="button"
             onClick={handleCancel}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+            disabled={loading}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-600 hover:text-purple-800 border border-purple-200 transition cursor-pointer"
             aria-label="Close"
           >
             <X size={16} />
           </button>
-
         </div>
 
         {/* ======================================================
@@ -482,7 +375,7 @@ function Task() {
         ====================================================== */}
 
         {errorMessage && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-medium">
             {errorMessage}
           </div>
         )}
@@ -493,7 +386,7 @@ function Task() {
 
         <form
           onSubmit={handleSaveTask}
-          className="space-y-3.5"
+          className="space-y-4"
         >
 
           {/* ====================================================
@@ -501,23 +394,22 @@ function Task() {
           ==================================================== */}
 
           <div>
-
-            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
-              Task Title *
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Task Title <span className="text-purple-600">*</span>
             </label>
 
             <input
               type="text"
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
               placeholder="e.g. Implement Auth Middleware"
               value={title}
               onChange={(e) =>
                 setTitle(e.target.value)
               }
               maxLength={100}
+              disabled={loading}
               required
             />
-
           </div>
 
           {/* ====================================================
@@ -525,88 +417,65 @@ function Task() {
           ==================================================== */}
 
           <div>
-
-            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
-              Description *
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Description <span className="text-purple-600">*</span>
             </label>
 
             <textarea
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 resize-y h-[70px]"
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 resize-none h-24 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
               placeholder="Detail task requirements..."
               value={description}
               onChange={(e) =>
                 setDescription(e.target.value)
               }
               maxLength={500}
+              disabled={loading}
               required
             />
-
           </div>
 
           {/* ====================================================
               PRIORITY & STATUS
           ==================================================== */}
 
-          <div className="grid grid-cols-2 gap-2.5">
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-
-              <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Priority
               </label>
 
               <select
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
                 value={priority}
                 onChange={(e) =>
                   setPriority(e.target.value)
                 }
+                disabled={loading}
               >
-                <option value="Low">
-                  Low
-                </option>
-
-                <option value="Medium">
-                  Medium
-                </option>
-
-                <option value="High">
-                  High
-                </option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
               </select>
-
             </div>
 
             <div>
-
-              <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Status
               </label>
 
               <select
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
                 value={status}
                 onChange={(e) =>
                   setStatus(e.target.value)
                 }
+                disabled={loading}
               >
-
-                <option value="Pending">
-                  Pending
-                </option>
-
-                <option value="In Progress">
-                  In Progress
-                </option>
-
-                <option value="Completed">
-                  Completed
-                </option>
-
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
               </select>
-
             </div>
-
           </div>
 
           {/* ====================================================
@@ -614,13 +483,12 @@ function Task() {
           ==================================================== */}
 
           <div>
-
-            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
-              Assign To *
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Assign To <span className="text-purple-600">*</span>
             </label>
 
             <select
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
               value={assignedTo}
               onChange={(e) =>
                 setAssignedTo(e.target.value)
@@ -631,7 +499,6 @@ function Task() {
               }
               required
             >
-
               <option value="">
                 {loadingMembers
                   ? "Loading team members..."
@@ -658,16 +525,14 @@ function Task() {
                     : ""}
                 </option>
               ))}
-
             </select>
 
             {!loadingMembers &&
               members.length === 0 && (
-                <p className="mt-1.5 text-[10px] text-amber-600">
+                <p className="mt-1.5 text-xs text-amber-600">
                   No team members found for this project.
                 </p>
               )}
-
           </div>
 
           {/* ====================================================
@@ -675,20 +540,19 @@ function Task() {
           ==================================================== */}
 
           <div>
-
-            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
               Due Date
             </label>
 
             <input
               type="date"
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 outline-none cursor-pointer transition-all focus:bg-white focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 cursor-pointer focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
               value={dueDate}
               onChange={(e) =>
                 setDueDate(e.target.value)
               }
+              disabled={loading}
             />
-
           </div>
 
           {/* ====================================================
@@ -696,15 +560,11 @@ function Task() {
           ==================================================== */}
 
           <div>
-
-            <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
               Attachment
             </label>
 
             <div className="flex items-center gap-2">
-
-              {/* Hidden File Input */}
-
               <input
                 ref={fileInputRef}
                 type="file"
@@ -713,15 +573,13 @@ function Task() {
                 onChange={handleAttachmentChange}
               />
 
-              {/* Paperclip Button */}
-
               <button
                 type="button"
                 onClick={() =>
                   fileInputRef.current?.click()
                 }
                 disabled={loading}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-all cursor-pointer disabled:opacity-50"
+                className="w-12 h-12 flex items-center justify-center rounded-xl bg-slate-50 border border-purple-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
                 title="Attach a file"
                 aria-label="Attach a file"
               >
@@ -731,29 +589,22 @@ function Task() {
                 />
               </button>
 
-              {/* Selected File */}
-
               {attachment ? (
-
-                <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-
+                <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2.5 bg-slate-50 border border-purple-200 rounded-xl">
                   <FileText
                     size={16}
-                    className="text-teal-600 flex-shrink-0"
+                    className="text-purple-600 flex-shrink-0"
                   />
 
                   <div className="min-w-0 flex-1">
-
                     <p className="text-xs font-medium text-slate-700 truncate">
                       {attachment.name}
                     </p>
-
                     <p className="text-[10px] text-slate-400">
                       {formatFileSize(
                         attachment.size
                       )}
                     </p>
-
                   </div>
 
                   <button
@@ -761,42 +612,31 @@ function Task() {
                     onClick={
                       handleRemoveAttachment
                     }
-                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-500 hover:text-red-600 transition-colors cursor-pointer flex-shrink-0"
+                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-purple-100 text-slate-500 hover:text-red-600 transition cursor-pointer flex-shrink-0"
                     title="Remove attachment"
                     aria-label="Remove attachment"
                   >
                     <X size={14} />
                   </button>
-
                 </div>
-
               ) : (
-
                 <p className="text-xs text-slate-400">
-                  Optional — attach a file or image
+                  Optional — attach a file or image (max 10MB)
                 </p>
-
               )}
-
             </div>
-
-            <p className="mt-1.5 text-[10px] text-slate-400">
-              Maximum file size: 10 MB
-            </p>
-
           </div>
 
           {/* ====================================================
               ACTION BUTTONS
           ==================================================== */}
 
-          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-
+          <div className="flex gap-3 pt-3">
             <button
               type="button"
               onClick={handleCancel}
               disabled={loading}
-              className="w-full sm:flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+              className="flex-1 py-3 rounded-xl border border-purple-200 text-xs font-bold text-slate-600 hover:bg-purple-50 hover:border-purple-300 transition disabled:opacity-50 cursor-pointer"
             >
               Cancel
             </button>
@@ -808,13 +648,12 @@ function Task() {
                 loadingMembers ||
                 members.length === 0
               }
-              className="w-full sm:flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold hover:opacity-90 transition shadow-md shadow-purple-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading
                 ? "Saving Task..."
                 : "Save Task"}
             </button>
-
           </div>
 
         </form>
@@ -825,4 +664,3 @@ function Task() {
 }
 
 export default Task;
-

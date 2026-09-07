@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import TaskCalendar from "../components/Calendar";
 import AIAssistant from "../components/AIAssistant";
 import Transcription from "../pages/Transcription";
-
+import Task from "../pages/Task";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -142,9 +142,6 @@ function ProjectDetails() {
       .trim()
       .toLowerCase();
 
-  // AI Assistant is available ONLY to Project Managers.
-  // Do not use project ownership here because a Developer may own
-  // a project they created themselves.
   const currentUserRole = String(
     currentUser?.role ||
       currentUser?.user_role ||
@@ -161,8 +158,6 @@ function ProjectDetails() {
   // =========================================================
   // ROLE-BASED DASHBOARD NAVIGATION
   // =========================================================
-  // Managers return to the Manager Dashboard.
-  // Developers/Members return to the Member Dashboard.
   const handleBackToDashboard = () => {
     navigate(
       isManager ? "/manager-dashboard" : "/member-dashboard",
@@ -185,7 +180,6 @@ function ProjectDetails() {
       return String(currentUserId) === String(creatorId);
     }
 
-    // Fallback comparison by email/name if IDs aren't directly aligned
     const creatorEmail = task.created_by_email || (typeof task.creator === "object" ? task.creator?.email : null);
     if (currentUser.email && creatorEmail) {
       return currentUser.email.toLowerCase() === creatorEmail.toLowerCase();
@@ -194,13 +188,10 @@ function ProjectDetails() {
     return false;
   };
 
-  // Can the user edit this specific task?
-  // Owners can edit any task. Members can edit tasks they created OR tasks assigned to them (to change status).
   const canEditTask = (task) => {
     if (isProjectOwner) return true;
     if (isTaskCreator(task)) return true;
 
-    // Check if task is assigned to current user
     const currentUserId = currentUser?.id || currentUser?._id;
     const assigneeId =
       task.assignee_id ||
@@ -219,8 +210,6 @@ function ProjectDetails() {
     return false;
   };
 
-  // Can the user delete this specific task?
-  // Members can ONLY delete tasks they created themselves. They cannot delete manager-assigned tasks.
   const canDeleteTask = (task) => {
     if (isProjectOwner) return true;
     return isTaskCreator(task);
@@ -354,10 +343,6 @@ function ProjectDetails() {
           ? data.tasks
           : [];
 
-        // IMPORTANT:
-        // Normalize the status when tasks are fetched from the backend.
-        // The AI may return "In Progress", "in progress", or
-        // "in-progress". The UI always stores "in-progress".
         const normalizedTasks = taskList.map(normalizeTaskForUI);
 
         setTasks(normalizedTasks);
@@ -401,8 +386,6 @@ function ProjectDetails() {
         return;
       }
 
-      // Fetch the authoritative task from the backend, then normalize
-      // its status before rendering it.
       fetchTasks(false);
     };
 
@@ -471,10 +454,6 @@ function ProjectDetails() {
     return `${API_URL}/${String(attachment).replace(/^\/+/, "")}`;
   };
 
-  // =========================================================
-  // OPEN ATTACHMENT
-  // =========================================================
-
   const handleViewAttachment = (task) => {
     const attachmentUrl =
       getAttachmentUrl(task);
@@ -494,11 +473,6 @@ function ProjectDetails() {
   // NORMALIZE STATUS
   // =========================================================
 
-  // =========================================================
-  // NORMALIZE STATUS
-  // =========================================================
-  // Always convert backend/AI status values into the exact
-  // values used by the task UI.
   const normalizeStatus = (status) => {
     if (status === null || status === undefined) {
       return "todo";
@@ -508,7 +482,7 @@ function ProjectDetails() {
       .trim()
       .toLowerCase()
       .replace(/[_-]+/g, " ")
-      .replace(/\\s+/g, " ");
+      .replace(/\s+/g, " ");
 
     if (
       normalized === "completed" ||
@@ -539,12 +513,9 @@ function ProjectDetails() {
       return "todo";
     }
 
-    // Keep the UI safe for unknown values by treating them as To Do.
     return "todo";
   };
 
-  // Get the status from the different field names that may be returned
-  // by the Node/Python/AI task APIs.
   const getTaskStatusValue = (task) => {
     if (!task) return "todo";
 
@@ -558,28 +529,24 @@ function ProjectDetails() {
     );
   };
 
-  
- const normalizeTaskForUI = (task) => {
-  if (!task) return task;
+  const normalizeTaskForUI = (task) => {
+    if (!task) return task;
 
-  const rawStatus = getTaskStatusValue(task);
+    const rawStatus = getTaskStatusValue(task);
 
-  const rawDueDate =
-    task.due_date ||
-    task.dueDate ||
-    task.task_due_date ||
-    task.taskDueDate ||
-    null;
+    const rawDueDate =
+      task.due_date ||
+      task.dueDate ||
+      task.task_due_date ||
+      task.taskDueDate ||
+      null;
 
-  return {
-    ...task,
-
-    
-    due_date: rawDueDate,
-
-    status: normalizeStatus(rawStatus),
+    return {
+      ...task,
+      due_date: rawDueDate,
+      status: normalizeStatus(rawStatus),
+    };
   };
-};
 
   const taskCounts = useMemo(() => {
     return {
@@ -616,10 +583,6 @@ function ProjectDetails() {
     );
   }, [tasks, activeTaskStatus]);
 
-  // =========================================================
-  // STATUS LABEL
-  // =========================================================
-
   const getStatusLabel = (status) => {
     const normalized =
       normalizeStatus(status);
@@ -635,28 +598,20 @@ function ProjectDetails() {
     return "TO DO";
   };
 
-  // =========================================================
-  // STATUS STYLE
-  // =========================================================
-
   const getStatusStyle = (status) => {
     const normalized =
       normalizeStatus(status);
 
     if (normalized === "completed") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "bg-pink-50 text-pink-700 border-pink-200";
     }
 
     if (normalized === "in-progress") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
+      return "bg-purple-50 text-purple-700 border-purple-200";
     }
 
-    return "bg-slate-100 text-slate-600 border-slate-200";
+    return "bg-purple-50 text-purple-700 border-purple-200";
   };
-
-  // =========================================================
-  // ASSIGNEE NAME
-  // =========================================================
 
   const getAssigneeName = (task) => {
     if (task.assignee) {
@@ -683,63 +638,64 @@ function ProjectDetails() {
     return "Unassigned";
   };
 
-  // =========================================================
-  // FORMAT DATE
-  // =========================================================
-
   const formatDate = (date) => {
-  if (!date) return "—";
+    if (!date) return "—";
 
-  // If backend sends:
-  // 2026-09-28
-  // or
-  // 2026-09-28T00:00:00.000Z
-  // keep the original calendar date.
-  if (typeof date === "string") {
-    const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (typeof date === "string") {
+      const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
 
-    if (match) {
-      const [year, month, day] = match[1].split("-");
+      if (match) {
+        const [year, month, day] = match[1].split("-");
 
-      const localDate = new Date(
-        Number(year),
-        Number(month) - 1,
-        Number(day)
-      );
+        const localDate = new Date(
+          Number(year),
+          Number(month) - 1,
+          Number(day)
+        );
 
-      return localDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+        return localDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
     }
-  }
 
-  const parsedDate =
-    date instanceof Date ? date : new Date(date);
+    const parsedDate =
+      date instanceof Date ? date : new Date(date);
 
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "—";
-  }
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "—";
+    }
 
-  return parsedDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
+    return parsedDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
-  // =========================================================
-  // CREATE TASK
-  // =========================================================
+  const getDateInputValue = (date) => {
+    if (!date) return "";
+
+    if (typeof date === "string") {
+      const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) return match[1];
+    }
+
+    const parsedDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) return "";
+
+    const year = parsedDate.getFullYear();
+    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(parsedDate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
 
   const handleCreateTask = () => {
     navigate(`/add-task/${id}`);
   };
-
-  // =========================================================
-  // OPEN EDIT MODAL
-  // =========================================================
 
   const handleOpenEditModal = (task) => {
     if (!canEditTask(task)) {
@@ -767,30 +723,10 @@ function ProjectDetails() {
       task.due_date ||
       task.dueDate;
 
-    if (rawDate) {
-      const d = new Date(rawDate);
-
-      if (
-        !Number.isNaN(
-          d.getTime()
-        )
-      ) {
-        setEditFormDueDate(
-          d.toISOString().split("T")[0]
-        );
-      } else {
-        setEditFormDueDate("");
-      }
-    } else {
-      setEditFormDueDate("");
-    }
+    setEditFormDueDate(getDateInputValue(rawDate));
 
     setShowEditModal(true);
   };
-
-  // =========================================================
-  // SAVE EDIT TASK
-  // =========================================================
 
   const handleSaveEditTask = async (e) => {
     e.preventDefault();
@@ -808,9 +744,6 @@ function ProjectDetails() {
       return;
     }
 
-    // If a member is editing a task they didn't create (e.g. manager assigned), 
-    // they should only be permitted to update the status, keeping title/desc intact if needed, 
-    // or we can allow backend rules to handle it. Here we send the form data.
     const isOwnerOrCreator = isProjectOwner || isTaskCreator(editingTask);
 
     try {
@@ -825,7 +758,6 @@ function ProjectDetails() {
             due_date: editFormDueDate || null,
           }
         : {
-            // Members updating assigned tasks from managers can change status
             status: editFormStatus,
             name: editingTask.name || editingTask.title,
             title: editingTask.name || editingTask.title,
@@ -837,12 +769,10 @@ function ProjectDetails() {
         `${API_URL}/api/tasks/${editingTask.id}`,
         {
           method: "PUT",
-
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify(payload),
         }
       );
@@ -874,7 +804,6 @@ function ProjectDetails() {
                 name: isOwnerOrCreator ? editFormName : t.name,
                 title: isOwnerOrCreator ? editFormName : t.title,
                 description: isOwnerOrCreator ? editFormDesc : t.description,
-                // The value selected in the UI is already canonical.
                 status: editFormStatus,
                 due_date: isOwnerOrCreator ? editFormDueDate : t.due_date,
               })
@@ -899,10 +828,6 @@ function ProjectDetails() {
     }
   };
 
-  // =========================================================
-  // DELETE TASK MODAL
-  // =========================================================
-
   const openDeleteTaskModal = (task) => {
     if (!canDeleteTask(task)) {
       return;
@@ -911,10 +836,6 @@ function ProjectDetails() {
     setTaskToDelete(task);
     setShowDeleteModal(true);
   };
-
-  // =========================================================
-  // DELETE TASK
-  // =========================================================
 
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
@@ -939,7 +860,6 @@ function ProjectDetails() {
         `${API_URL}/api/tasks/${taskToDelete.id}`,
         {
           method: "DELETE",
-
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type":
@@ -991,10 +911,6 @@ function ProjectDetails() {
     }
   };
 
-  // =========================================================
-  // DELETE ALL TASKS
-  // =========================================================
-
   const handleDeleteAllTasks = async () => {
     if (!isProjectOwner) {
       return;
@@ -1014,7 +930,6 @@ function ProjectDetails() {
         `${API_URL}/api/tasks/project/${id}/all`,
         {
           method: "DELETE",
-
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type":
@@ -1058,31 +973,19 @@ function ProjectDetails() {
     }
   };
 
-  // =========================================================
-  // TRANSCRIPTION NAVIGATION
-  // =========================================================
-
   const handleTabClick = (tab) => {
-    // AI Assistant is a manager-only feature.
     if (tab === "assistant" && !isManager) {
       return;
     }
 
-    // Transcription is rendered inside this ProjectDetails page.
-    // It should NOT navigate to a separate page.
     setActiveTab(tab);
   };
 
-  // A non-manager must never remain on the manager-only Assistant tab.
   useEffect(() => {
     if (activeTab === "assistant" && !isManager) {
       setActiveTab("tasks");
     }
   }, [activeTab, isManager]);
-
-  // =========================================================
-  // LOADING
-  // =========================================================
 
   if (loadingProject) {
     return (
@@ -1091,10 +994,6 @@ function ProjectDetails() {
       </div>
     );
   }
-
-  // =========================================================
-  // PROJECT ERROR
-  // =========================================================
 
   if (projectError) {
     return (
@@ -1125,25 +1024,12 @@ function ProjectDetails() {
 
   if (!project) return null;
 
-  // =========================================================
-  // UI
-  // =========================================================
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
-
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-
+      <header className="sticky top-0 z-40 bg-white border-b border-purple-100">
         <div className="max-w-7xl mx-auto px-6">
-
-          <div className="h-16 flex items-center justify-between">
-
+          <div className="h-16 flex items-center justify-between relative">
             <div className="flex items-center gap-4">
-
               <button
                 onClick={handleBackToDashboard}
                 className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-500 transition-colors"
@@ -1153,9 +1039,7 @@ function ProjectDetails() {
               </button>
 
               <div>
-
                 <div className="flex items-center gap-2">
-
                   <h1 className="text-lg font-bold text-slate-900">
                     {project.name ||
                       project.title ||
@@ -1166,23 +1050,15 @@ function ProjectDetails() {
                     {project.status ||
                       "Active"}
                   </span>
-
                 </div>
 
                 <p className="text-xs text-slate-400 mt-0.5">
                   Project workspace
                 </p>
-
               </div>
-
             </div>
 
-            {/* HEADER ACTIONS */}
-
             <div className="flex items-center gap-2.5">
-
-              {/* DELETE ALL TASKS - OWNER ONLY */}
-
               {isProjectOwner &&
                 tasks.length > 0 && (
                   <button
@@ -1200,12 +1076,11 @@ function ProjectDetails() {
                   </button>
                 )}
 
-              {/* ADD TASK - AVAILABLE TO ALL MEMBERS AND OWNERS */}
               <button
                 onClick={
                   handleCreateTask
                 }
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-90 text-white text-xs font-bold shadow-sm transition-colors"
               >
                 <Plus
                   size={15}
@@ -1214,64 +1089,42 @@ function ProjectDetails() {
 
                 Add Task
               </button>
-
             </div>
-
           </div>
 
-          {/* =================================================
-              TABS
-          ================================================= */}
-
-         <div className="flex items-center gap-1 overflow-x-auto">
-
-  {[
-    "tasks",
-    "calendar",
-    "transcription",
-    ...(isManager ? ["assistant"] : []),
-  ].map((tab) => (
-
-    <button
-      key={tab}
-      onClick={() =>
-        handleTabClick(tab)
-      }
-      className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors capitalize whitespace-nowrap ${
-        activeTab === tab
-          ? "border-indigo-600 text-indigo-600"
-          : "border-transparent text-slate-500 hover:text-slate-800"
-      }`}
-    >
-
-      {tab === "assistant"
-        ? "AI Assistant"
-        : tab}
-
-    </button>
-
-  ))}
-
-</div>
-
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {[
+              "tasks",
+              "task",
+              "calendar",
+              "transcription",
+              ...(isManager ? ["assistant"] : []),
+            ].map((tab) => (
+              <button
+                key={tab}
+                onClick={() =>
+                  handleTabClick(tab)
+                }
+                className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors capitalize whitespace-nowrap ${
+                  activeTab === tab
+                    ? "border-purple-600 text-purple-600"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {tab === "assistant"
+                  ? "AI Assistant"
+                  : tab}
+              </button>
+            ))}
+          </div>
         </div>
-
       </header>
 
-      {/* =====================================================
-          CONTENT
-      ===================================================== */}
-
       <main className="max-w-7xl mx-auto px-6 py-7">
-
         {activeTab === "tasks" && (
-
           <div>
-
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-
               <div>
-
                 <h2 className="text-xl font-bold text-slate-900">
                   Tasks
                 </h2>
@@ -1284,13 +1137,9 @@ function ProjectDetails() {
                       "member"}
                   </span>
                 </p>
-
               </div>
 
-              {/* VIEW TOGGLE */}
-
               <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm self-start lg:self-auto">
-
                 <button
                   onClick={() =>
                     setTaskViewMode(
@@ -1326,12 +1175,8 @@ function ProjectDetails() {
                   />
                   Board
                 </button>
-
               </div>
-
             </div>
-
-            {/* TASK ERROR */}
 
             {taskError && (
               <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1339,10 +1184,7 @@ function ProjectDetails() {
               </div>
             )}
 
-            {/* STATUS CARDS */}
-
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-
               {[
                 {
                   key: "all",
@@ -1371,7 +1213,6 @@ function ProjectDetails() {
                     taskCounts.completed,
                 },
               ].map((item) => (
-
                 <button
                   key={item.key}
                   onClick={() =>
@@ -1379,54 +1220,49 @@ function ProjectDetails() {
                       item.key
                     )
                   }
-                  className={`text-left p-4 rounded-2xl border transition-all ${
-                    activeTaskStatus ===
-                    item.key
-                      ? "border-indigo-200 bg-indigo-50/60 shadow-sm"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                  className={`text-left p-4 rounded-2xl border transition-all duration-200 ${
+                    activeTaskStatus === item.key
+                      ? "border-transparent bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/20"
+                      : "border-purple-100 bg-purple-50/60 hover:border-purple-300 hover:bg-purple-100/70 shadow-sm"
                   }`}
                 >
-
-                  <span className="text-xs font-bold text-slate-500">
+                  <span
+                    className={`text-xs font-bold ${
+                      activeTaskStatus === item.key
+                        ? "text-white/90"
+                        : "text-purple-600"
+                    }`}
+                  >
                     {item.label}
                   </span>
 
-                  <p className="text-2xl font-bold text-slate-900 mt-2">
+                  <p
+                    className={`text-2xl font-bold mt-2 ${
+                      activeTaskStatus === item.key
+                        ? "text-white"
+                        : "text-purple-900"
+                    }`}
+                  >
                     {item.count}
                   </p>
-
                 </button>
-
               ))}
-
             </div>
-
-            {/* =================================================
-                LIST VIEW
-            ================================================= */}
 
             {taskViewMode ===
             "list" ? (
-
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-
+              <div className="bg-white border border-purple-100 rounded-2xl overflow-hidden shadow-sm">
                 {loadingTasks ? (
-
                   <div className="py-14 text-center">
-
                     <div className="w-7 h-7 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-3" />
 
                     <p className="text-xs text-slate-500">
                       Loading tasks...
                     </p>
-
                   </div>
-
                 ) : filteredTasks.length ===
                   0 ? (
-
                   <div className="py-16 text-center">
-
                     <FolderKanban
                       size={24}
                       className="mx-auto mb-3 text-slate-300"
@@ -1441,206 +1277,158 @@ function ProjectDetails() {
                       matching this
                       filter view.
                     </p>
-
                   </div>
-
                 ) : (
-
                   <div className="divide-y divide-slate-100">
-
                     {filteredTasks.map(
                       (task) => {
                         const showActions = canEditTask(task) || canDeleteTask(task);
                         return (
+                          <div
+                            key={task.id}
+                            className="px-5 py-4 hover:bg-purple-50/30 transition-colors"
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                              <div
+                                className={
+                                  showActions
+                                    ? "md:col-span-4"
+                                    : "md:col-span-6"
+                                }
+                              >
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {task.name ||
+                                      task.title}
+                                  </p>
 
-                        <div
-                          key={task.id}
-                          className="px-5 py-4 hover:bg-slate-50/80 transition-colors"
-                        >
+                                  {getAttachmentUrl(
+                                    task
+                                  ) && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleViewAttachment(
+                                          task
+                                        )
+                                      }
+                                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-400 hover:text-purple-600 flex items-center justify-center transition-colors shrink-0"
+                                      title="View attachment"
+                                    >
+                                      <Paperclip
+                                        size={14}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-
-                            <div
-                              className={
-                                showActions
-                                  ? "md:col-span-4"
-                                  : "md:col-span-6"
-                              }
-                            >
-
-                              <div className="flex items-center gap-2">
-
-                                <p className="text-sm font-semibold text-slate-800">
-                                  {task.name ||
-                                    task.title}
-                                </p>
-
-                                {/* ATTACHMENT */}
-
-                                {getAttachmentUrl(
-                                  task
-                                ) && (
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleViewAttachment(
-                                        task
-                                      )
+                                {task.description && (
+                                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                                    {
+                                      task.description
                                     }
-                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 flex items-center justify-center transition-colors shrink-0"
-                                    title="View attachment"
-                                  >
-                                    <Paperclip
-                                      size={14}
-                                    />
-                                  </button>
-
+                                  </p>
                                 )}
-
                               </div>
 
-                              {task.description && (
-
-                                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                                  {
-                                    task.description
-                                  }
-                                </p>
-
-                              )}
-
-                            </div>
-
-                            <div className="md:col-span-2">
-
-                              <span
-                                className={`inline-flex px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getStatusStyle(
-                                  task.status
-                                )}`}
-                              >
-                                {getStatusLabel(
-                                  task.status
-                                )}
-                              </span>
-
-                            </div>
-
-                            <div className="md:col-span-2">
-
-                              <span className="text-xs text-slate-600 font-medium">
-                                {getAssigneeName(
-                                  task
-                                )}
-                              </span>
-
-                            </div>
-
-                            <div className="md:col-span-2">
-
-                              <div className="flex items-center gap-2">
-
-                                <CalendarDays
-                                  size={14}
-                                  className="text-slate-400"
-                                />
-
-                                <span className="text-xs font-semibold text-slate-600">
-                                  {formatDate(
-                                    task.due_date ||
-                                      task.dueDate
+                              <div className="md:col-span-2">
+                                <span
+                                  className={`inline-flex px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getStatusStyle(
+                                    task.status
+                                  )}`}
+                                >
+                                  {getStatusLabel(
+                                    task.status
                                   )}
                                 </span>
-
                               </div>
 
+                              <div className="md:col-span-2">
+                                <span className="text-xs text-slate-600 font-medium">
+                                  {getAssigneeName(
+                                    task
+                                  )}
+                                </span>
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <div className="flex items-center gap-2">
+                                  <CalendarDays
+                                    size={14}
+                                    className="text-purple-600"
+                                  />
+
+                                  <span className="text-xs font-semibold text-purple-700">
+                                    {formatDate(
+                                      task.due_date ||
+                                        task.dueDate
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {showActions && (
+                                <div className="md:col-span-2 flex items-center justify-end gap-2">
+                                  {canEditTask(task) && (
+                                    <button
+                                      onClick={() =>
+                                        handleOpenEditModal(
+                                          task
+                                        )
+                                      }
+                                      className="w-9 h-9 rounded-xl border border-purple-100 bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center transition-colors"
+                                      title="Edit task status or details"
+                                    >
+                                      <Pencil
+                                        size={15}
+                                      />
+                                    </button>
+                                  )}
+
+                                  {canDeleteTask(task) && (
+                                    <button
+                                      onClick={() =>
+                                        openDeleteTaskModal(
+                                          task
+                                        )
+                                      }
+                                      className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center transition-colors"
+                                      title="Delete task"
+                                    >
+                                      <Trash2
+                                        size={15}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
-
-                            {/* DYNAMIC ACTIONS PER TASK PERMISSION */}
-
-                            {showActions && (
-
-                              <div className="md:col-span-2 flex items-center justify-end gap-2">
-
-                                {canEditTask(task) && (
-                                  <button
-                                    onClick={() =>
-                                      handleOpenEditModal(
-                                        task
-                                      )
-                                    }
-                                    className="w-9 h-9 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors"
-                                    title="Edit task status or details"
-                                  >
-                                    <Pencil
-                                      size={15}
-                                    />
-                                  </button>
-                                )}
-
-                                {canDeleteTask(task) && (
-                                  <button
-                                    onClick={() =>
-                                      openDeleteTaskModal(
-                                        task
-                                      )
-                                    }
-                                    className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center transition-colors"
-                                    title="Delete task"
-                                  >
-                                    <Trash2
-                                      size={15}
-                                    />
-                                  </button>
-                                )}
-
-                              </div>
-
-                            )}
-
                           </div>
-
-                        </div>
-
-                      );
+                        );
                       }
                     )}
-
                   </div>
-
                 )}
-
               </div>
-
             ) : (
-
-              /* =================================================
-                  BOARD VIEW
-              ================================================= */
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
                 {[
                   "todo",
                   "in-progress",
                   "completed",
                 ].map(
                   (statusKey) => (
-
                     <div
                       key={statusKey}
-                      className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"
+                      className="bg-white border border-purple-100 rounded-2xl p-4 shadow-sm"
                     >
-
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-4 flex items-center justify-between">
-
                         {statusKey.replace(
                           "-",
                           " "
                         )}
 
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold text-[10px]">
-
                           {
                             tasks.filter(
                               (t) =>
@@ -1650,13 +1438,10 @@ function ProjectDetails() {
                                 statusKey
                             ).length
                           }
-
                         </span>
-
                       </h3>
 
                       <div className="space-y-3">
-
                         {tasks
                           .filter(
                             (t) =>
@@ -1669,180 +1454,140 @@ function ProjectDetails() {
                             (task) => {
                               const showBoardActions = canEditTask(task) || canDeleteTask(task);
                               return (
+                                <div
+                                  key={task.id}
+                                  className="p-4 border border-purple-100 rounded-xl bg-purple-50/30 hover:border-purple-200 hover:shadow-sm transition-all"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold text-slate-800">
+                                          {task.name ||
+                                            task.title}
+                                        </p>
 
-                              <div
-                                key={task.id}
-                                className="p-4 border border-slate-200 rounded-xl bg-slate-50 hover:shadow-sm transition-shadow"
-                              >
+                                        {getAttachmentUrl(
+                                          task
+                                        ) && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleViewAttachment(
+                                                task
+                                              )
+                                            }
+                                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 flex items-center justify-center transition-colors shrink-0"
+                                            title="View attachment"
+                                          >
+                                            <Paperclip
+                                              size={13}
+                                            />
+                                          </button>
+                                        )}
+                                      </div>
 
-                                <div className="flex items-start justify-between gap-3">
-
-                                  <div className="min-w-0">
-
-                                    <div className="flex items-center gap-2">
-
-                                      <p className="text-sm font-semibold text-slate-800">
-                                        {task.name ||
-                                          task.title}
-                                      </p>
-
-                                      {/* ATTACHMENT */}
-
-                                      {getAttachmentUrl(
-                                        task
-                                      ) && (
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleViewAttachment(
-                                              task
-                                            )
+                                      {task.description && (
+                                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                                          {
+                                            task.description
                                           }
-                                          className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center transition-colors shrink-0"
-                                          title="View attachment"
-                                        >
-                                          <Paperclip
-                                            size={13}
-                                          />
-                                        </button>
-
+                                        </p>
                                       )}
 
+                                      <p className="text-xs text-purple-600 font-medium mt-3">
+                                        {getAssigneeName(
+                                          task
+                                        )}
+                                      </p>
                                     </div>
 
-                                    {task.description && (
+                                    {showBoardActions && (
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {canEditTask(task) && (
+                                          <button
+                                            onClick={() =>
+                                              handleOpenEditModal(
+                                                task
+                                              )
+                                            }
+                                            className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center justify-center"
+                                            title="Edit"
+                                          >
+                                            <Pencil
+                                              size={13}
+                                            />
+                                          </button>
+                                        )}
 
-                                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                                        {
-                                          task.description
-                                        }
-                                      </p>
-
+                                        {canDeleteTask(task) && (
+                                          <button
+                                            onClick={() =>
+                                              openDeleteTaskModal(
+                                                task
+                                              )
+                                            }
+                                            className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
+                                            title="Delete"
+                                          >
+                                            <Trash2
+                                              size={13}
+                                            />
+                                          </button>
+                                        )}
+                                      </div>
                                     )}
-
-                                    <p className="text-xs text-indigo-600 font-medium mt-3">
-                                      {getAssigneeName(
-                                        task
-                                      )}
-                                    </p>
-
                                   </div>
-
-                                  {/* DYNAMIC ACTIONS PER TASK PERMISSION */}
-
-                                  {showBoardActions && (
-
-                                    <div className="flex items-center gap-1 shrink-0">
-
-                                      {canEditTask(task) && (
-                                        <button
-                                          onClick={() =>
-                                            handleOpenEditModal(
-                                              task
-                                            )
-                                          }
-                                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center"
-                                          title="Edit"
-                                        >
-                                          <Pencil
-                                            size={13}
-                                          />
-                                        </button>
-                                      )}
-
-                                      {canDeleteTask(task) && (
-                                        <button
-                                          onClick={() =>
-                                            openDeleteTaskModal(
-                                              task
-                                            )
-                                          }
-                                          className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
-                                          title="Delete"
-                                        >
-                                          <Trash2
-                                            size={13}
-                                          />
-                                        </button>
-                                      )}
-
-                                    </div>
-
-                                  )}
-
                                 </div>
-
-                              </div>
-
-                            );
+                              );
                             }
                           )}
-
                       </div>
-
                     </div>
-
                   )
                 )}
-
               </div>
-
             )}
-
           </div>
-
         )}
 
-        {/* =====================================================
-            AI ASSISTANT
-        ===================================================== */}
+        {activeTab === "task" && (
+          <div className="w-full">
+            <Task projectId={id} />
+          </div>
+        )}
 
         {activeTab === "transcription" && (
-
           <div className="w-full">
             <Transcription embedded projectId={id} />
           </div>
-
         )}
 
         {activeTab === "calendar" && (
-  <TaskCalendar tasks={tasks} />
-)}
+          <div className="w-full bg-white border border-purple-100 rounded-2xl p-4 md:p-6 shadow-sm">
+            <TaskCalendar tasks={tasks} />
+          </div>
+        )}
 
         {activeTab === "assistant" && isManager && (
-
           <div>
             <AIAssistant projectId={id} />
           </div>
-
         )}
-
       </main>
-
-      {/* =====================================================
-          EDIT TASK MODAL
-      ===================================================== */}
 
       {showEditModal &&
         editingTask && (
-
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-
             <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-
               <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-
                 <div className="flex items-center gap-2">
-
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
                     <Pencil size={16} />
                   </div>
 
                   <h3 className="text-base font-bold text-slate-900">
                     {isProjectOwner || isTaskCreator(editingTask) ? "Edit Task Details" : "Update Task Status"}
                   </h3>
-
                 </div>
 
                 <button
@@ -1855,7 +1600,6 @@ function ProjectDetails() {
                 >
                   <X size={16} />
                 </button>
-
               </div>
 
               <form
@@ -1864,11 +1608,9 @@ function ProjectDetails() {
                 }
                 className="p-6 space-y-4"
               >
-
                 {(isProjectOwner || isTaskCreator(editingTask)) ? (
                   <>
                     <div>
-
                       <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                         Task Title
                       </label>
@@ -1884,13 +1626,11 @@ function ProjectDetails() {
                           )
                         }
                         required
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-purple-600"
                       />
-
                     </div>
 
                     <div>
-
                       <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                         Description
                       </label>
@@ -1905,9 +1645,8 @@ function ProjectDetails() {
                             e.target.value
                           )
                         }
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600 resize-none"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-purple-600 resize-none"
                       />
-
                     </div>
                   </>
                 ) : (
@@ -1917,9 +1656,7 @@ function ProjectDetails() {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                   <div>
-
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                       Status
                     </label>
@@ -1933,9 +1670,8 @@ function ProjectDetails() {
                           e.target.value
                         )
                       }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600 bg-white"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-purple-600 bg-white"
                     >
-
                       <option value="todo">
                         To Do
                       </option>
@@ -1947,14 +1683,11 @@ function ProjectDetails() {
                       <option value="completed">
                         Completed
                       </option>
-
                     </select>
-
                   </div>
 
                   {(isProjectOwner || isTaskCreator(editingTask)) && (
                     <div>
-
                       <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                         Due Date
                       </label>
@@ -1969,16 +1702,13 @@ function ProjectDetails() {
                             e.target.value
                           )
                         }
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-indigo-600"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-purple-600"
                       />
-
                     </div>
                   )}
-
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-
+                <div className="flex justify-end gap-3 pt-4 border-t border-purple-50">
                   <button
                     type="button"
                     onClick={() =>
@@ -1996,38 +1726,24 @@ function ProjectDetails() {
                     disabled={
                       savingEdit
                     }
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-90 text-white text-xs font-semibold shadow-sm disabled:opacity-50"
                   >
-
                     <Save size={14} />
 
                     {savingEdit
                       ? "Saving..."
                       : "Save Changes"}
-
                   </button>
-
                 </div>
-
               </form>
-
             </div>
-
           </div>
-
         )}
-
-      {/* =====================================================
-          DELETE SINGLE TASK MODAL
-      ===================================================== */}
 
       {showDeleteModal &&
         taskToDelete && (
-
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-
             <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6">
-
               <div className="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mb-4">
                 <Trash2 size={20} />
               </div>
@@ -2037,24 +1753,19 @@ function ProjectDetails() {
               </h3>
 
               <p className="text-sm text-slate-600 mt-2">
-
                 Are you sure you want to
                 delete{" "}
 
                 <span className="font-semibold text-slate-900">
-
                   {taskToDelete.title ||
                     taskToDelete.name}
-
                 </span>
 
                 ? This action cannot be
                 undone.
-
               </p>
 
               <div className="flex justify-end gap-3 mt-6">
-
                 <button
                   onClick={() =>
                     setShowDeleteModal(
@@ -2076,32 +1787,19 @@ function ProjectDetails() {
                   }
                   className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm disabled:opacity-50"
                 >
-
                   {deletingTaskId ===
                   taskToDelete.id
                     ? "Deleting..."
                     : "Delete Task"}
-
                 </button>
-
               </div>
-
             </div>
-
           </div>
-
         )}
 
-      {/* =====================================================
-          DELETE ALL TASKS MODAL
-      ===================================================== */}
-
       {showDeleteAllModal && (
-
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6">
-
             <h3 className="text-base font-bold text-slate-900 mb-2">
               Delete All Tasks?
             </h3>
@@ -2113,7 +1811,6 @@ function ProjectDetails() {
             </p>
 
             <div className="flex items-center justify-end gap-3">
-
               <button
                 onClick={() =>
                   setShowDeleteAllModal(
@@ -2134,21 +1831,14 @@ function ProjectDetails() {
                 }
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm disabled:opacity-50 transition-colors"
               >
-
                 {deletingAllTasks
                   ? "Deleting..."
                   : "Yes"}
-
               </button>
-
             </div>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }
