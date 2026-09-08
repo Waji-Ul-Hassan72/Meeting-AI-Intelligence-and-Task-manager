@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -16,6 +15,20 @@ function MemberDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // ============================================================
+  // AUTO-DISMISS ERROR MESSAGES (3 SECONDS)
+  // ============================================================
+
+  useEffect(() => {
+    if (!errorMessage) return;
+
+    const timer = setTimeout(() => {
+      setErrorMessage("");
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [errorMessage]);
 
   // ============================================================
   // GET CURRENT USER
@@ -58,7 +71,6 @@ function MemberDashboard() {
     }
 
     try {
-      setLoading(true);
       setErrorMessage("");
 
       const data = await getProjects();
@@ -114,11 +126,18 @@ function MemberDashboard() {
   };
 
   // ============================================================
-  // LOAD PROJECTS
+  // LOAD PROJECTS & AUTO-POLL FOR UPDATES (REAL-TIME SYNC)
   // ============================================================
 
   useEffect(() => {
     fetchProjects();
+
+    // Automatically check for newly assigned projects and tasks every 5 seconds without manual refresh
+    const interval = setInterval(() => {
+      fetchProjects();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // ============================================================
@@ -428,7 +447,7 @@ function MemberDashboard() {
           ) : (
 
             /* ==================================================
-               PROJECT GRID
+                PROJECT GRID
             ================================================== */
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -517,12 +536,6 @@ function MemberDashboard() {
                         Open Project
                       </button>
 
-                      {/* IMPORTANT:
-                          NO EDIT BUTTON
-                          NO DELETE BUTTON
-                          NO CREATE PROJECT BUTTON
-                      */}
-
                     </div>
 
                   </div>
@@ -543,5 +556,3 @@ function MemberDashboard() {
 }
 
 export default MemberDashboard;
-
-

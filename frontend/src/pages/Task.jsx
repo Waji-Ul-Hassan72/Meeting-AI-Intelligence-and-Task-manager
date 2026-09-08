@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createTask } from "../services/api";
-import { Paperclip, X, FileText } from "lucide-react";
+import { Paperclip, X, FileText, ArrowLeft } from "lucide-react";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
   "http://localhost:3000";
 
-function Task() {
+function Task({ embedded = false, projectId: propProjectId, onClose, onTaskCreated }) {
   const navigate = useNavigate();
-  const { projectId } = useParams();
+  const params = useParams();
+  const projectId = propProjectId || params.projectId || params.id;
 
   const fileInputRef = useRef(null);
 
@@ -275,7 +276,13 @@ function Task() {
 
       await createTask(formData);
 
-      navigate(-1);
+      if (onTaskCreated) {
+        onTaskCreated();
+      } else if (onClose) {
+        onClose();
+      } else {
+        navigate(-1);
+      }
 
     } catch (error) {
       console.error(
@@ -318,7 +325,11 @@ function Task() {
   // ============================================================
 
   const handleCancel = () => {
-    navigate(-1);
+    if (onClose) {
+      onClose();
+    } else {
+      navigate(-1);
+    }
   };
 
   // ============================================================
@@ -338,27 +349,37 @@ function Task() {
   };
 
   // ============================================================
-  // UI
+  // UI CONTENT COMPONENT
   // ============================================================
 
-  return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-sans overflow-y-auto">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-purple-200 p-6 sm:p-7">
-        
-        {/* ======================================================
-            HEADER
-        ====================================================== */}
+  const formContent = (
+    <div className={`w-full ${embedded ? "bg-white border border-purple-100 rounded-2xl p-6 md:p-8 shadow-sm" : "max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-purple-200 p-6 sm:p-7"}`}>
+      
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
-        <div className="flex items-center justify-between pb-4 mb-5 border-b border-purple-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Create Project Task
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Organize your execution schedule and details.
-            </p>
-          </div>
+      <div className="flex items-center justify-between pb-4 mb-5 border-b border-purple-100">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">
+            Create Project Task
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Organize your execution schedule and details.
+          </p>
+        </div>
 
+        {embedded ? (
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={loading}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center gap-2 text-slate-700 shadow-sm transition-colors"
+          >
+            <ArrowLeft size={14} />
+            Back to Tasks
+          </button>
+        ) : (
           <button
             type="button"
             onClick={handleCancel}
@@ -368,297 +389,307 @@ function Task() {
           >
             <X size={16} />
           </button>
+        )}
+      </div>
+
+      {/* ======================================================
+          ERROR MESSAGE
+      ====================================================== */}
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-medium">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* ======================================================
+          FORM
+      ====================================================== */}
+
+      <form
+        onSubmit={handleSaveTask}
+        className="space-y-4"
+      >
+
+        {/* ====================================================
+            TASK TITLE
+        ==================================================== */}
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Task Title <span className="text-purple-600">*</span>
+          </label>
+
+          <input
+            type="text"
+            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
+            placeholder="e.g. Implement Auth Middleware"
+            value={title}
+            onChange={(e) =>
+              setTitle(e.target.value)
+            }
+            maxLength={100}
+            disabled={loading}
+            required
+          />
         </div>
 
-        {/* ======================================================
-            ERROR MESSAGE
-        ====================================================== */}
+        {/* ====================================================
+            DESCRIPTION
+        ==================================================== */}
 
-        {errorMessage && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-medium">
-            {errorMessage}
-          </div>
-        )}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Description <span className="text-purple-600">*</span>
+          </label>
 
-        {/* ======================================================
-            FORM
-        ====================================================== */}
+          <textarea
+            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 resize-none h-24 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
+            placeholder="Detail task requirements..."
+            value={description}
+            onChange={(e) =>
+              setDescription(e.target.value)
+            }
+            maxLength={500}
+            disabled={loading}
+            required
+          />
+        </div>
 
-        <form
-          onSubmit={handleSaveTask}
-          className="space-y-4"
-        >
+        {/* ====================================================
+            PRIORITY & STATUS
+        ==================================================== */}
 
-          {/* ====================================================
-              TASK TITLE
-          ==================================================== */}
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Task Title <span className="text-purple-600">*</span>
-            </label>
-
-            <input
-              type="text"
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-              placeholder="e.g. Implement Auth Middleware"
-              value={title}
-              onChange={(e) =>
-                setTitle(e.target.value)
-              }
-              maxLength={100}
-              disabled={loading}
-              required
-            />
-          </div>
-
-          {/* ====================================================
-              DESCRIPTION
-          ==================================================== */}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Description <span className="text-purple-600">*</span>
-            </label>
-
-            <textarea
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 resize-none h-24 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-              placeholder="Detail task requirements..."
-              value={description}
-              onChange={(e) =>
-                setDescription(e.target.value)
-              }
-              maxLength={500}
-              disabled={loading}
-              required
-            />
-          </div>
-
-          {/* ====================================================
-              PRIORITY & STATUS
-          ==================================================== */}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Priority
-              </label>
-
-              <select
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value)
-                }
-                disabled={loading}
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Status
-              </label>
-
-              <select
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-                value={status}
-                onChange={(e) =>
-                  setStatus(e.target.value)
-                }
-                disabled={loading}
-              >
-                <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-              </select>
-            </div>
-          </div>
-
-          {/* ====================================================
-              ASSIGN TO
-          ==================================================== */}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Assign To <span className="text-purple-600">*</span>
+              Priority
             </label>
 
             <select
               className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-              value={assignedTo}
+              value={priority}
               onChange={(e) =>
-                setAssignedTo(e.target.value)
-              }
-              disabled={
-                loadingMembers ||
-                loading
-              }
-              required
-            >
-              <option value="">
-                {loadingMembers
-                  ? "Loading team members..."
-                  : "Select team member"}
-              </option>
-
-              {members.map((member) => (
-                <option
-                  key={member.id}
-                  value={member.id}
-                >
-                  {member.name ||
-                    member.full_name ||
-                    member.username ||
-                    member.email}
-
-                  {member.email &&
-                  (
-                    member.name ||
-                    member.full_name ||
-                    member.username
-                  )
-                    ? ` (${member.email})`
-                    : ""}
-                </option>
-              ))}
-            </select>
-
-            {!loadingMembers &&
-              members.length === 0 && (
-                <p className="mt-1.5 text-xs text-amber-600">
-                  No team members found for this project.
-                </p>
-              )}
-          </div>
-
-          {/* ====================================================
-              DUE DATE
-          ==================================================== */}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Due Date
-            </label>
-
-            <input
-              type="date"
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 cursor-pointer focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
-              value={dueDate}
-              onChange={(e) =>
-                setDueDate(e.target.value)
+                setPriority(e.target.value)
               }
               disabled={loading}
-            />
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
           </div>
-
-          {/* ====================================================
-              ATTACHMENT
-          ==================================================== */}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Attachment
+              Status
             </label>
 
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                onChange={handleAttachmentChange}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  fileInputRef.current?.click()
-                }
-                disabled={loading}
-                className="w-12 h-12 flex items-center justify-center rounded-xl bg-slate-50 border border-purple-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
-                title="Attach a file"
-                aria-label="Attach a file"
-              >
-                <Paperclip
-                  size={18}
-                  strokeWidth={2}
-                />
-              </button>
-
-              {attachment ? (
-                <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2.5 bg-slate-50 border border-purple-200 rounded-xl">
-                  <FileText
-                    size={16}
-                    className="text-purple-600 flex-shrink-0"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-700 truncate">
-                      {attachment.name}
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      {formatFileSize(
-                        attachment.size
-                      )}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={
-                      handleRemoveAttachment
-                    }
-                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-purple-100 text-slate-500 hover:text-red-600 transition cursor-pointer flex-shrink-0"
-                    title="Remove attachment"
-                    aria-label="Remove attachment"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400">
-                  Optional — attach a file or image (max 10MB)
-                </p>
-              )}
-            </div>
+            <select
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
+              value={status}
+              onChange={(e) =>
+                setStatus(e.target.value)
+              }
+              disabled={loading}
+            >
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
           </div>
+        </div>
 
-          {/* ====================================================
-              ACTION BUTTONS
-          ==================================================== */}
+        {/* ====================================================
+            ASSIGN TO
+        ==================================================== */}
 
-          <div className="flex gap-3 pt-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Assign To <span className="text-purple-600">*</span>
+          </label>
+
+          <select
+            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
+            value={assignedTo}
+            onChange={(e) =>
+              setAssignedTo(e.target.value)
+            }
+            disabled={
+              loadingMembers ||
+              loading
+            }
+            required
+          >
+            <option value="">
+              {loadingMembers
+                ? "Loading team members..."
+                : "Select team member"}
+            </option>
+
+            {members.map((member) => (
+              <option
+                key={member.id}
+                value={member.id}
+              >
+                {member.name ||
+                  member.full_name ||
+                  member.username ||
+                  member.email}
+
+                {member.email &&
+                (
+                  member.name ||
+                  member.full_name ||
+                  member.username
+                )
+                  ? ` (${member.email})`
+                  : ""}
+              </option>
+            ))}
+          </select>
+
+          {!loadingMembers &&
+            members.length === 0 && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                No team members found for this project.
+              </p>
+            )}
+        </div>
+
+        {/* ====================================================
+            DUE DATE
+        ==================================================== */}
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Due Date
+          </label>
+
+          <input
+            type="date"
+            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-purple-200 outline-none text-sm text-slate-900 cursor-pointer focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 transition disabled:opacity-60"
+            value={dueDate}
+            onChange={(e) =>
+              setDueDate(e.target.value)
+            }
+            disabled={loading}
+          />
+        </div>
+
+        {/* ====================================================
+            ATTACHMENT
+        ==================================================== */}
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Attachment
+          </label>
+
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={handleAttachmentChange}
+            />
+
             <button
               type="button"
-              onClick={handleCancel}
-              disabled={loading}
-              className="flex-1 py-3 rounded-xl border border-purple-200 text-xs font-bold text-slate-600 hover:bg-purple-50 hover:border-purple-300 transition disabled:opacity-50 cursor-pointer"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={
-                loading ||
-                loadingMembers ||
-                members.length === 0
+              onClick={() =>
+                fileInputRef.current?.click()
               }
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold hover:opacity-90 transition shadow-md shadow-purple-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              disabled={loading}
+              className="w-12 h-12 flex items-center justify-center rounded-xl bg-slate-50 border border-purple-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
+              title="Attach a file"
+              aria-label="Attach a file"
             >
-              {loading
-                ? "Saving Task..."
-                : "Save Task"}
+              <Paperclip
+                size={18}
+                strokeWidth={2}
+              />
             </button>
+
+            {attachment ? (
+              <div className="flex items-center gap-2 min-w-0 flex-1 px-3 py-2.5 bg-slate-50 border border-purple-200 rounded-xl">
+                <FileText
+                  size={16}
+                  className="text-purple-600 flex-shrink-0"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-slate-700 truncate">
+                    {attachment.name}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {formatFileSize(
+                      attachment.size
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleRemoveAttachment
+                  }
+                  className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-purple-100 text-slate-500 hover:text-red-600 transition cursor-pointer flex-shrink-0"
+                  title="Remove attachment"
+                  aria-label="Remove attachment"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Optional — attach a file or image (max 10MB)
+              </p>
+            )}
           </div>
+        </div>
 
-        </form>
+        {/* ====================================================
+            ACTION BUTTONS
+        ==================================================== */}
 
-      </div>
+        <div className="flex gap-3 pt-3">
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={loading}
+            className="flex-1 py-3 rounded-xl border border-purple-200 text-xs font-bold text-slate-600 hover:bg-purple-50 hover:border-purple-300 transition disabled:opacity-50 cursor-pointer"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              loadingMembers ||
+              members.length === 0
+            }
+            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold hover:opacity-90 transition shadow-md shadow-purple-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {loading
+              ? "Saving Task..."
+              : "Save Task"}
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  );
+
+  if (embedded) {
+    return formContent;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-sans overflow-y-auto">
+      {formContent}
     </div>
   );
 }

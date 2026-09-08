@@ -1,16 +1,8 @@
 const db = require("../config/db");
 const nodemailer = require("nodemailer");
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
-
-// ============================================================
-// EMAIL CONFIGURATION
-// ============================================================
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -19,10 +11,6 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS,
     },
 });
-
-// ============================================================
-// AUTH HELPERS
-// ============================================================
 
 const getUserId = (req) => {
     return (
@@ -80,13 +68,10 @@ const getPagination = (req) => {
 // ============================================================
 
 const getAttachmentValue = (req) => {
-
-    // Uploaded file through multer
     if (req.file) {
         return `/uploads/tasks/${req.file.filename}`;
     }
 
-    // Attachment supplied directly
     if (
         req.body &&
         Object.prototype.hasOwnProperty.call(
@@ -112,7 +97,6 @@ const sendTaskAssignmentEmail = async ({
     dueDate,
     projectName,
 }) => {
-
     if (!memberEmail) {
         console.log(
             "No email address found for assigned member."
@@ -122,13 +106,9 @@ const sendTaskAssignmentEmail = async ({
     }
 
     try {
-
         await transporter.sendMail({
-
             from: `"CollabFlow AI" <${process.env.EMAIL_USER}>`,
-
             to: memberEmail,
-
             subject: `New Task Assigned: ${taskTitle}`,
 
             html: `
@@ -290,7 +270,6 @@ const sendTaskAssignmentEmail = async ({
         return true;
 
     } catch (error) {
-
         console.error(
             "Task assignment email error:",
             error.message
@@ -306,10 +285,8 @@ const sendTaskAssignmentEmail = async ({
 
 const getTaskCounts = async (
     userId,
-    projectId = null,
-    req = null
+    projectId = null
 ) => {
-
     let query = `
         SELECT
             COUNT(*) AS total,
@@ -330,10 +307,11 @@ const getTaskCounts = async (
             ) AS completed
 
         FROM tasks
+
+        WHERE deleted_at IS NULL
     `;
 
     const params = [];
-
     const conditions = [];
 
     if (projectId) {
@@ -345,7 +323,7 @@ const getTaskCounts = async (
     }
 
     if (conditions.length > 0) {
-        query += ` WHERE ${conditions.join(" AND ")}`;
+        query += ` AND ${conditions.join(" AND ")}`;
     }
 
     const result = await db.query(
@@ -368,11 +346,9 @@ const getTaskCounts = async (
 // ============================================================
 
 const createTask = async (req, res) => {
-
     const client = await db.connect();
 
     try {
-
         const {
             title,
             name,
@@ -431,18 +407,17 @@ const createTask = async (req, res) => {
         const attachment =
             getAttachmentValue(req);
 
+        let assignedMember = null;
+
         // ====================================================
         // ASSIGNMENT
         // ====================================================
-
-        let assignedMember = null;
 
         if (
             assigned_to !== undefined &&
             assigned_to !== null &&
             assigned_to !== ""
         ) {
-
             const assignedUserId =
                 parseInt(assigned_to, 10);
 
@@ -452,11 +427,6 @@ const createTask = async (req, res) => {
                         "Invalid assigned user ID.",
                 });
             }
-
-            /*
-                Project Managers can assign tasks to anyone in the project.
-                Developers (Members) can only assign tasks to themselves.
-            */
 
             if (isManager(req)) {
                 if (!parsedProjectId) {
@@ -504,7 +474,9 @@ const createTask = async (req, res) => {
                         ]
                     );
 
-                if (memberResult.rows.length === 0) {
+                if (
+                    memberResult.rows.length === 0
+                ) {
                     return res.status(400).json({
                         error:
                             "Selected user is not a member of this project.",
@@ -513,19 +485,24 @@ const createTask = async (req, res) => {
 
                 assignedMember =
                     memberResult.rows[0];
-            } else {
-                const userResult = await client.query(
-                    `
-                    SELECT id, name, email
-                    FROM users
-                    WHERE id = $1
-                    LIMIT 1
-                    `,
-                    [assignedUserId]
-                );
 
-                if (userResult.rows.length > 0) {
-                    assignedMember = userResult.rows[0];
+            } else {
+                const userResult =
+                    await client.query(
+                        `
+                        SELECT id, name, email
+                        FROM users
+                        WHERE id = $1
+                        LIMIT 1
+                        `,
+                        [assignedUserId]
+                    );
+
+                if (
+                    userResult.rows.length > 0
+                ) {
+                    assignedMember =
+                        userResult.rows[0];
                 }
             }
         }
@@ -537,7 +514,6 @@ const createTask = async (req, res) => {
         let projectName = "";
 
         if (parsedProjectId) {
-
             const projectResult =
                 await client.query(
                     `
@@ -549,21 +525,19 @@ const createTask = async (req, res) => {
                     [parsedProjectId]
                 );
 
-            if (projectResult.rows.length > 0) {
+            if (
+                projectResult.rows.length > 0
+            ) {
                 projectName =
                     projectResult.rows[0].name;
             }
         }
 
         // ====================================================
-        // BEGIN TRANSACTION
+        // TRANSACTION
         // ====================================================
 
         await client.query("BEGIN");
-
-        // ====================================================
-        // INSERT TASK
-        // ====================================================
 
         const result =
             await client.query(
@@ -639,17 +613,11 @@ const createTask = async (req, res) => {
         const createdTask =
             result.rows[0];
 
-        // ====================================================
-        // SEND EMAIL
-        // ====================================================
-
         let emailSent = false;
 
         if (assignedMember) {
-
             emailSent =
                 await sendTaskAssignmentEmail({
-
                     memberEmail:
                         assignedMember.email,
 
@@ -668,10 +636,6 @@ const createTask = async (req, res) => {
                     projectName,
                 });
         }
-
-        // ====================================================
-        // RETURN TASK
-        // ====================================================
 
         const finalTaskResult =
             await db.query(
@@ -696,14 +660,11 @@ const createTask = async (req, res) => {
             );
 
         return res.status(201).json({
-
             ...finalTaskResult.rows[0],
-
             emailSent,
         });
 
     } catch (error) {
-
         try {
             await client.query("ROLLBACK");
         } catch (rollbackError) {
@@ -723,19 +684,16 @@ const createTask = async (req, res) => {
         });
 
     } finally {
-
         client.release();
     }
 };
 
 // ============================================================
-// GET ALL TASKS
+// GET ALL ACTIVE TASKS
 // ============================================================
 
 const getTasks = async (req, res) => {
-
     try {
-
         const user_id = getUserId(req);
 
         if (!user_id) {
@@ -752,9 +710,7 @@ const getTasks = async (req, res) => {
         } = getPagination(req);
 
         const counts =
-            await getTaskCounts(
-                user_id
-            );
+            await getTaskCounts(user_id);
 
         const totalPages =
             Math.max(
@@ -768,7 +724,6 @@ const getTasks = async (req, res) => {
             await db.query(
                 `
                 SELECT
-
                     t.*,
 
                     u.id AS assigned_user_id,
@@ -781,6 +736,8 @@ const getTasks = async (req, res) => {
 
                 LEFT JOIN users u
                     ON u.id = t.assigned_to
+
+                WHERE t.deleted_at IS NULL
 
                 ORDER BY
                     t.due_date ASC NULLS LAST,
@@ -796,7 +753,6 @@ const getTasks = async (req, res) => {
             );
 
         return res.status(200).json({
-
             tasks:
                 result.rows,
 
@@ -804,13 +760,10 @@ const getTasks = async (req, res) => {
                 counts,
 
             pagination: {
-
                 page,
                 limit,
-
                 total:
                     counts.total,
-
                 totalPages,
             },
 
@@ -818,7 +771,6 @@ const getTasks = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error(
             "Get tasks error:",
             error
@@ -835,9 +787,7 @@ const getTasks = async (req, res) => {
 // ============================================================
 
 const getTasksByProject = async (req, res) => {
-
     try {
-
         const {
             projectId,
         } = req.params;
@@ -890,10 +840,6 @@ const getTasksByProject = async (req, res) => {
             });
         }
 
-        // ====================================================
-        // PAGINATION
-        // ====================================================
-
         const {
             page,
             limit,
@@ -904,7 +850,6 @@ const getTasksByProject = async (req, res) => {
             await db.query(
                 `
                 SELECT
-
                     COUNT(*) AS total,
 
                     COUNT(*) FILTER (
@@ -925,6 +870,7 @@ const getTasksByProject = async (req, res) => {
                 FROM tasks
 
                 WHERE project_id = $1
+                AND deleted_at IS NULL
                 `,
                 [parsedProjectId]
             );
@@ -933,7 +879,6 @@ const getTasksByProject = async (req, res) => {
             countResult.rows[0];
 
         const counts = {
-
             total:
                 parseInt(
                     countRow.total,
@@ -967,15 +912,10 @@ const getTasksByProject = async (req, res) => {
                 )
             );
 
-        // ====================================================
-        // GET PROJECT TASKS
-        // ====================================================
-
         const result =
             await db.query(
                 `
                 SELECT
-
                     t.*,
 
                     u.id AS assigned_user_id,
@@ -990,6 +930,7 @@ const getTasksByProject = async (req, res) => {
                     ON u.id = t.assigned_to
 
                 WHERE t.project_id = $1
+                AND t.deleted_at IS NULL
 
                 ORDER BY
                     t.due_date ASC NULLS LAST,
@@ -1006,7 +947,6 @@ const getTasksByProject = async (req, res) => {
             );
 
         return res.status(200).json({
-
             tasks:
                 result.rows,
 
@@ -1014,13 +954,10 @@ const getTasksByProject = async (req, res) => {
                 counts,
 
             pagination: {
-
                 page,
                 limit,
-
                 total:
                     counts.total,
-
                 totalPages,
             },
 
@@ -1028,7 +965,6 @@ const getTasksByProject = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error(
             "Get project tasks error:",
             error
@@ -1041,13 +977,11 @@ const getTasksByProject = async (req, res) => {
 };
 
 // ============================================================
-// GET SINGLE TASK
+// GET SINGLE ACTIVE TASK
 // ============================================================
 
 const getTaskById = async (req, res) => {
-
     try {
-
         const {
             id,
         } = req.params;
@@ -1065,7 +999,6 @@ const getTaskById = async (req, res) => {
             await db.query(
                 `
                 SELECT
-
                     t.*,
 
                     u.id AS assigned_user_id,
@@ -1080,6 +1013,7 @@ const getTaskById = async (req, res) => {
                     ON u.id = t.assigned_to
 
                 WHERE t.id = $1
+                AND t.deleted_at IS NULL
                 `,
                 [id]
             );
@@ -1098,7 +1032,6 @@ const getTaskById = async (req, res) => {
         );
 
     } catch (error) {
-
         console.error(
             "Get task error:",
             error
@@ -1115,9 +1048,7 @@ const getTaskById = async (req, res) => {
 // ============================================================
 
 const updateTask = async (req, res) => {
-
     try {
-
         const {
             id,
         } = req.params;
@@ -1132,7 +1063,6 @@ const updateTask = async (req, res) => {
         }
 
         const allowedFields = [
-
             "title",
             "description",
             "priority",
@@ -1145,7 +1075,6 @@ const updateTask = async (req, res) => {
             "repeat_type",
             "repeat_months",
             "repeat_days",
-
         ];
 
         const body = {
@@ -1158,6 +1087,7 @@ const updateTask = async (req, res) => {
                 SELECT *
                 FROM tasks
                 WHERE id = $1
+                AND deleted_at IS NULL
                 `,
                 [id]
             );
@@ -1175,16 +1105,16 @@ const updateTask = async (req, res) => {
             existingTaskResult.rows[0];
 
         // ====================================================
-        // MEMBER PERMISSION CHECK (Edit)
-        // Members can edit tasks if they created them OR if the task is assigned to them
+        // MEMBER PERMISSION CHECK
         // ====================================================
 
         if (
             isMember(req) &&
-            String(existingTask.user_id) !== String(user_id) &&
-            String(existingTask.assigned_to) !== String(user_id)
+            String(existingTask.user_id) !==
+                String(user_id) &&
+            String(existingTask.assigned_to) !==
+                String(user_id)
         ) {
-
             return res.status(403).json({
                 error:
                     "You can only edit tasks created by you or assigned to you.",
@@ -1218,7 +1148,6 @@ const updateTask = async (req, res) => {
         // ====================================================
 
         if (isMember(req)) {
-
             if (
                 body.assigned_to !== undefined
             ) {
@@ -1241,7 +1170,7 @@ const updateTask = async (req, res) => {
         }
 
         // ====================================================
-        // HANDLE ATTACHMENT
+        // ATTACHMENT
         // ====================================================
 
         const uploadedAttachment =
@@ -1253,10 +1182,6 @@ const updateTask = async (req, res) => {
             body.attachment =
                 uploadedAttachment;
         }
-
-        // ====================================================
-        // FINAL PROJECT
-        // ====================================================
 
         const finalProjectId =
             body.project_id !== undefined
@@ -1272,7 +1197,6 @@ const updateTask = async (req, res) => {
             body.assigned_to !== null &&
             body.assigned_to !== ""
         ) {
-
             if (!isManager(req)) {
                 return res.status(403).json({
                     error:
@@ -1353,15 +1277,12 @@ const updateTask = async (req, res) => {
         for (
             const field of allowedFields
         ) {
-
             if (
                 body[field] !== undefined
             ) {
-
                 if (
                     field === "project_id"
                 ) {
-
                     updates.push(
                         `project_id = $${parameterIndex}::integer`
                     );
@@ -1378,7 +1299,6 @@ const updateTask = async (req, res) => {
                 } else if (
                     field === "assigned_to"
                 ) {
-
                     updates.push(
                         `assigned_to = $${parameterIndex}::integer`
                     );
@@ -1394,19 +1314,15 @@ const updateTask = async (req, res) => {
                     );
 
                 } else {
-
                     updates.push(
                         `${field} = $${parameterIndex}`
                     );
 
                     values.push(
-
                         field === "title"
-
                             ? String(
                                 body[field]
                             ).trim()
-
                             : body[field]
                     );
                 }
@@ -1433,6 +1349,7 @@ const updateTask = async (req, res) => {
                 ${updates.join(", ")}
 
             WHERE id = $${parameterIndex}
+            AND deleted_at IS NULL
 
             RETURNING *
         `;
@@ -1472,7 +1389,6 @@ const updateTask = async (req, res) => {
             assignmentChanged &&
             updatedTask.assigned_to
         ) {
-
             const memberResult =
                 await db.query(
                     `
@@ -1492,7 +1408,6 @@ const updateTask = async (req, res) => {
             if (
                 memberResult.rows.length > 0
             ) {
-
                 const member =
                     memberResult.rows[0];
 
@@ -1501,7 +1416,6 @@ const updateTask = async (req, res) => {
                 if (
                     updatedTask.project_id
                 ) {
-
                     const projectResult =
                         await db.query(
                             `
@@ -1523,7 +1437,6 @@ const updateTask = async (req, res) => {
                 }
 
                 await sendTaskAssignmentEmail({
-
                     memberEmail:
                         member.email,
 
@@ -1552,7 +1465,6 @@ const updateTask = async (req, res) => {
             await db.query(
                 `
                 SELECT
-
                     t.*,
 
                     u.id AS assigned_user_id,
@@ -1578,7 +1490,6 @@ const updateTask = async (req, res) => {
         );
 
     } catch (error) {
-
         console.error(
             "Update task error:",
             error
@@ -1591,13 +1502,11 @@ const updateTask = async (req, res) => {
 };
 
 // ============================================================
-// DELETE TASK
+// MOVE TASK TO TRASH
 // ============================================================
 
 const deleteTask = async (req, res) => {
-
     try {
-
         const {
             id,
         } = req.params;
@@ -1617,6 +1526,7 @@ const deleteTask = async (req, res) => {
                 SELECT *
                 FROM tasks
                 WHERE id = $1
+                AND deleted_at IS NULL
                 `,
                 [id]
             );
@@ -1634,9 +1544,7 @@ const deleteTask = async (req, res) => {
             taskResult.rows[0];
 
         // ====================================================
-        // MEMBER OWNERSHIP CHECK (Delete)
-        // Members can ONLY delete tasks created by themselves.
-        // Tasks created by managers and assigned to members cannot be deleted by the member.
+        // MEMBER OWNERSHIP CHECK
         // ====================================================
 
         if (
@@ -1644,7 +1552,6 @@ const deleteTask = async (req, res) => {
             String(task.user_id) !==
                 String(user_id)
         ) {
-
             return res.status(403).json({
                 error:
                     "You can only delete tasks created by you.",
@@ -1652,15 +1559,18 @@ const deleteTask = async (req, res) => {
         }
 
         // ====================================================
-        // DELETE
+        // SOFT DELETE
         // ====================================================
 
         const result =
             await db.query(
                 `
-                DELETE FROM tasks
+                UPDATE tasks
+
+                SET deleted_at = NOW()
 
                 WHERE id = $1
+                AND deleted_at IS NULL
 
                 RETURNING *
                 `,
@@ -1668,18 +1578,16 @@ const deleteTask = async (req, res) => {
             );
 
         return res.status(200).json({
-
             message:
-                "Task deleted successfully.",
+                "Task moved to trash.",
 
             task:
                 result.rows[0],
         });
 
     } catch (error) {
-
         console.error(
-            "Delete task error:",
+            "Move task to trash error:",
             error
         );
 
@@ -1690,14 +1598,485 @@ const deleteTask = async (req, res) => {
 };
 
 // ============================================================
-// DELETE ALL PROJECT TASKS
+// GET TRASHED TASKS
+// ============================================================
+
+const getTrashedTasks = async (req, res) => {
+    try {
+        const user_id = getUserId(req);
+
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing.",
+            });
+        }
+
+        const {
+            page,
+            limit,
+            offset,
+        } = getPagination(req);
+
+        let countQuery;
+        let taskQuery;
+        let params;
+
+        if (isManager(req)) {
+            countQuery = `
+                SELECT COUNT(*) AS total
+                FROM tasks t
+                WHERE t.deleted_at IS NOT NULL
+                AND (
+                    t.user_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM projects p
+                        WHERE p.id = t.project_id
+                        AND p.created_by = $1
+                    )
+                )
+            `;
+
+            taskQuery = `
+                SELECT
+                    t.*,
+
+                    u.id AS assigned_user_id,
+
+                    u.name AS assigned_to_name,
+
+                    u.email AS assigned_to_email,
+
+                    p.name AS project_name
+
+                FROM tasks t
+
+                LEFT JOIN users u
+                    ON u.id = t.assigned_to
+
+                LEFT JOIN projects p
+                    ON p.id = t.project_id
+
+                WHERE t.deleted_at IS NOT NULL
+
+                AND (
+                    t.user_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM projects manager_projects
+                        WHERE manager_projects.id = t.project_id
+                        AND manager_projects.created_by = $1
+                    )
+                )
+
+                ORDER BY
+                    t.deleted_at DESC,
+                    t.id DESC
+
+                LIMIT $2
+                OFFSET $3
+            `;
+
+            params = [
+                user_id,
+                limit,
+                offset,
+            ];
+
+        } else {
+            countQuery = `
+                SELECT COUNT(*) AS total
+                FROM tasks t
+                WHERE t.deleted_at IS NOT NULL
+                AND t.user_id = $1
+            `;
+
+            taskQuery = `
+                SELECT
+                    t.*,
+
+                    u.id AS assigned_user_id,
+
+                    u.name AS assigned_to_name,
+
+                    u.email AS assigned_to_email,
+
+                    p.name AS project_name
+
+                FROM tasks t
+
+                LEFT JOIN users u
+                    ON u.id = t.assigned_to
+
+                LEFT JOIN projects p
+                    ON p.id = t.project_id
+
+                WHERE t.deleted_at IS NOT NULL
+                AND t.user_id = $1
+
+                ORDER BY
+                    t.deleted_at DESC,
+                    t.id DESC
+
+                LIMIT $2
+                OFFSET $3
+            `;
+
+            params = [
+                user_id,
+                limit,
+                offset,
+            ];
+        }
+
+        const countResult =
+            await db.query(
+                countQuery,
+                [user_id]
+            );
+
+        const total =
+            parseInt(
+                countResult.rows[0].total,
+                10
+            ) || 0;
+
+        const totalPages =
+            Math.max(
+                1,
+                Math.ceil(
+                    total / limit
+                )
+            );
+
+        const result =
+            await db.query(
+                taskQuery,
+                params
+            );
+
+        return res.status(200).json({
+            tasks:
+                result.rows,
+
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+            },
+
+            totalPages,
+        });
+
+    } catch (error) {
+        console.error(
+            "Get trash tasks error:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
+        });
+    }
+};
+
+// ============================================================
+// RESTORE TASK
+// ============================================================
+
+const restoreTask = async (req, res) => {
+    try {
+        const {
+            id,
+        } = req.params;
+
+        const user_id = getUserId(req);
+
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing.",
+            });
+        }
+
+        const taskResult =
+            await db.query(
+                `
+                SELECT *
+                FROM tasks
+                WHERE id = $1
+                AND deleted_at IS NOT NULL
+                `,
+                [id]
+            );
+
+        if (
+            taskResult.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Trashed task not found.",
+            });
+        }
+
+        const task =
+            taskResult.rows[0];
+
+        // ====================================================
+        // PERMISSION
+        // ====================================================
+
+        if (isMember(req)) {
+            if (
+                String(task.user_id) !==
+                String(user_id)
+            ) {
+                return res.status(403).json({
+                    error:
+                        "You can only restore tasks created by you.",
+                });
+            }
+        }
+
+        // Managers can restore tasks
+        // belonging to their projects.
+
+        if (isManager(req)) {
+            if (
+                String(task.user_id) !==
+                String(user_id)
+            ) {
+                if (!task.project_id) {
+                    return res.status(403).json({
+                        error:
+                            "You do not have permission to restore this task.",
+                    });
+                }
+
+                const projectResult =
+                    await db.query(
+                        `
+                        SELECT id
+                        FROM projects
+                        WHERE id = $1
+                        AND created_by = $2
+                        LIMIT 1
+                        `,
+                        [
+                            task.project_id,
+                            user_id,
+                        ]
+                    );
+
+                if (
+                    projectResult.rows.length === 0
+                ) {
+                    return res.status(403).json({
+                        error:
+                            "You do not have permission to restore this task.",
+                    });
+                }
+            }
+        }
+
+        const result =
+            await db.query(
+                `
+                UPDATE tasks
+
+                SET deleted_at = NULL
+
+                WHERE id = $1
+                AND deleted_at IS NOT NULL
+
+                RETURNING *
+                `,
+                [id]
+            );
+
+        if (
+            result.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Task could not be restored.",
+            });
+        }
+
+        return res.status(200).json({
+            message:
+                "Task restored successfully.",
+
+            task:
+                result.rows[0],
+        });
+
+    } catch (error) {
+        console.error(
+            "Restore task error:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
+        });
+    }
+};
+
+// ============================================================
+// PERMANENTLY DELETE TASK
+// ============================================================
+
+const permanentlyDeleteTask = async (
+    req,
+    res
+) => {
+    try {
+        const {
+            id,
+        } = req.params;
+
+        const user_id = getUserId(req);
+
+        if (!user_id) {
+            return res.status(401).json({
+                error:
+                    "User authentication missing.",
+            });
+        }
+
+        const taskResult =
+            await db.query(
+                `
+                SELECT *
+                FROM tasks
+                WHERE id = $1
+                AND deleted_at IS NOT NULL
+                `,
+                [id]
+            );
+
+        if (
+            taskResult.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Trashed task not found.",
+            });
+        }
+
+        const task =
+            taskResult.rows[0];
+
+        // ====================================================
+        // MEMBER PERMISSION
+        // ====================================================
+
+        if (isMember(req)) {
+            if (
+                String(task.user_id) !==
+                String(user_id)
+            ) {
+                return res.status(403).json({
+                    error:
+                        "You can only permanently delete tasks created by you.",
+                });
+            }
+        }
+
+        // ====================================================
+        // MANAGER PERMISSION
+        // ====================================================
+
+        if (isManager(req)) {
+            if (
+                String(task.user_id) !==
+                String(user_id)
+            ) {
+                if (!task.project_id) {
+                    return res.status(403).json({
+                        error:
+                            "You do not have permission to permanently delete this task.",
+                    });
+                }
+
+                const projectResult =
+                    await db.query(
+                        `
+                        SELECT id
+                        FROM projects
+                        WHERE id = $1
+                        AND created_by = $2
+                        LIMIT 1
+                        `,
+                        [
+                            task.project_id,
+                            user_id,
+                        ]
+                    );
+
+                if (
+                    projectResult.rows.length === 0
+                ) {
+                    return res.status(403).json({
+                        error:
+                            "You do not have permission to permanently delete this task.",
+                    });
+                }
+            }
+        }
+
+        const result =
+            await db.query(
+                `
+                DELETE FROM tasks
+
+                WHERE id = $1
+                AND deleted_at IS NOT NULL
+
+                RETURNING *
+                `,
+                [id]
+            );
+
+        if (
+            result.rows.length === 0
+        ) {
+            return res.status(404).json({
+                error:
+                    "Task could not be permanently deleted.",
+            });
+        }
+
+        return res.status(200).json({
+            message:
+                "Task permanently deleted.",
+        });
+
+    } catch (error) {
+        console.error(
+            "Permanent delete task error:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
+        });
+    }
+};
+
+
+
+
+// ============================================================
+// DELETE ALL PROJECT TASKS -> MOVE TO TRASH
 // ============================================================
 
 const deleteAllProjectTasks =
     async (req, res) => {
-
         try {
-
             const {
                 projectId,
             } = req.params;
@@ -1742,12 +2121,43 @@ const deleteAllProjectTasks =
                 });
             }
 
+            // Make sure manager owns the project.
+
+            const projectResult =
+                await db.query(
+                    `
+                    SELECT id
+                    FROM projects
+                    WHERE id = $1
+                    AND created_by = $2
+                    LIMIT 1
+                    `,
+                    [
+                        parsedProjectId,
+                        user_id,
+                    ]
+                );
+
+            if (
+                projectResult.rows.length === 0
+            ) {
+                return res.status(403).json({
+                    error:
+                        "You do not have permission to delete tasks from this project.",
+                });
+            }
+
+            // Soft delete all active tasks.
+
             const result =
                 await db.query(
                     `
-                    DELETE FROM tasks
+                    UPDATE tasks
+
+                    SET deleted_at = NOW()
 
                     WHERE project_id = $1::integer
+                    AND deleted_at IS NULL
 
                     RETURNING id
                     `,
@@ -1757,18 +2167,16 @@ const deleteAllProjectTasks =
                 );
 
             return res.status(200).json({
-
                 message:
-                    "All project tasks deleted successfully.",
+                    "All project tasks moved to trash.",
 
                 deletedCount:
                     result.rows.length,
             });
 
         } catch (error) {
-
             console.error(
-                "Delete all project tasks error:",
+                "Move all project tasks to trash error:",
                 error
             );
 
@@ -1778,26 +2186,104 @@ const deleteAllProjectTasks =
         }
     };
 
+    // ============================================================
+// PERMANENTLY DELETE ALL TRASHED PROJECT TASKS
+// ============================================================
+
+const deleteAllPermanentProjectTasks = async (req, res) => {
+    try {
+        const {
+            projectId,
+        } = req.params;
+
+        const user_id = getUserId(req);
+
+        if (!user_id) {
+            return res.status(401).json({
+                error: "User authentication missing.",
+            });
+        }
+
+        if (!isManager(req)) {
+            return res.status(403).json({
+                error: "Only managers can permanently delete all project trash.",
+            });
+        }
+
+        if (!projectId) {
+            return res.status(400).json({
+                error: "Project ID is required.",
+            });
+        }
+
+        const parsedProjectId = parseInt(projectId, 10);
+
+        if (Number.isNaN(parsedProjectId)) {
+            return res.status(400).json({
+                error: "Invalid project ID.",
+            });
+        }
+
+        const projectResult = await db.query(
+            `
+            SELECT id
+            FROM projects
+            WHERE id = $1
+            AND created_by = $2
+            LIMIT 1
+            `,
+            [parsedProjectId, user_id]
+        );
+
+        if (projectResult.rows.length === 0) {
+            return res.status(403).json({
+                error: "You do not have permission to delete tasks from this project.",
+            });
+        }
+
+        const result = await db.query(
+            `
+            DELETE FROM tasks
+            WHERE project_id = $1::integer
+            AND deleted_at IS NOT NULL
+            RETURNING id
+            `,
+            [parsedProjectId]
+        );
+
+        return res.status(200).json({
+            message: "All trashed project tasks permanently deleted.",
+            deletedCount: result.rows.length,
+        });
+
+    } catch (error) {
+        console.error(
+            "Permanent delete all project tasks error:",
+            error
+        );
+
+        return res.status(500).json({
+            error: error.message,
+        });
+    }
+};
+
 // ============================================================
 // EXPORTS
 // ============================================================
 
 module.exports = {
-
     createTask,
-
     getTasks,
-
     getTasksByProject,
-
     getTaskById,
-
     updateTask,
-
     deleteTask,
-
+    getTrashedTasks,
+    restoreTask,
+    permanentlyDeleteTask,
     deleteAllProjectTasks,
-
-    sendTaskAssignmentEmail
-
+    deleteAllPermanentProjectTasks,
+    sendTaskAssignmentEmail,
 };
+

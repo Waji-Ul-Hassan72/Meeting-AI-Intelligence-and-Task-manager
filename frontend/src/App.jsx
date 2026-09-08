@@ -26,7 +26,7 @@ import ProjectDetails from "./pages/ProjectDetails";
 // =======================
 // Task Pages
 // =======================
-import Task from "./pages/Task";
+//import Task from "./pages/Task";
 import Tasks from "./pages/Tasks";
 
 // =======================
@@ -211,7 +211,7 @@ function App() {
             TASK ROUTES
         ========================================== */}
 
-        {/* Add Task */}
+        {/* Add Task
         <Route
           path="/add-task/:projectId"
           element={
@@ -219,7 +219,7 @@ function App() {
               <Task />
             </ProtectedRoute>
           }
-        />
+        /> */}
 
         {/* All Tasks */}
         <Route

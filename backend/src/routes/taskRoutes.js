@@ -1,5 +1,4 @@
 const express = require("express");
-
 const router = express.Router();
 
 const {
@@ -9,33 +8,25 @@ const {
     getTaskById,
     updateTask,
     deleteTask,
-    deleteAllProjectTasks
+    deleteAllProjectTasks,
+    deleteAllPermanentProjectTasks,
+    getTrashedTasks,
+    restoreTask,
+    permanentlyDeleteTask
 } = require("../controllers/taskController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 
-// IMPORTANT:
-// upload.js exports:
-// module.exports = { uploadTaskAttachment };
-//
-// Therefore we must destructure it here.
 const {
     uploadTaskAttachment
 } = require("../middleware/upload");
 
-// ============================================================
-// AUTHENTICATION
-// ============================================================
-
-// Apply authentication middleware to all task endpoints.
 router.use(authMiddleware);
 
 // ============================================================
 // CREATE TASK
 // ============================================================
 
-// Attachment is optional.
-// If no file is selected, the task will still be created.
 router.post(
     "/",
     uploadTaskAttachment.single("attachment"),
@@ -49,6 +40,24 @@ router.post(
 router.get(
     "/",
     getTasks
+);
+
+// ============================================================
+// GET TRASHED TASKS
+// ============================================================
+
+router.get(
+    "/trash",
+    getTrashedTasks
+);
+
+// ============================================================
+// PERMANENTLY DELETE ALL TRASHED PROJECT TASKS
+// ============================================================
+
+router.delete(
+    "/project/:projectId/trash/all",
+    deleteAllPermanentProjectTasks
 );
 
 // ============================================================
@@ -82,11 +91,28 @@ router.get(
 // UPDATE TASK
 // ============================================================
 
-// Attachment can optionally be uploaded while updating.
 router.put(
     "/:id",
     uploadTaskAttachment.single("attachment"),
     updateTask
+);
+
+// ============================================================
+// RESTORE TASK FROM TRASH
+// ============================================================
+
+router.put(
+    "/:id/restore",
+    restoreTask
+);
+
+// ============================================================
+// PERMANENTLY DELETE TASK
+// ============================================================
+
+router.delete(
+    "/:id/permanent",
+    permanentlyDeleteTask
 );
 
 // ============================================================
@@ -103,4 +129,3 @@ router.delete(
 // ============================================================
 
 module.exports = router;
-
