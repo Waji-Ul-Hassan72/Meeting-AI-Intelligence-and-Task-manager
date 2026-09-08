@@ -1840,9 +1840,6 @@ const restoreTask = async (req, res) => {
             }
         }
 
-        // Managers can restore tasks
-        // belonging to their projects.
-
         if (isManager(req)) {
             if (
                 String(task.user_id) !==
@@ -1986,10 +1983,6 @@ const permanentlyDeleteTask = async (
             }
         }
 
-        // ====================================================
-        // MANAGER PERMISSION
-        // ====================================================
-
         if (isManager(req)) {
             if (
                 String(task.user_id) !==
@@ -2067,9 +2060,6 @@ const permanentlyDeleteTask = async (
     }
 };
 
-
-
-
 // ============================================================
 // DELETE ALL PROJECT TASKS -> MOVE TO TRASH
 // ============================================================
@@ -2121,8 +2111,6 @@ const deleteAllProjectTasks =
                 });
             }
 
-            // Make sure manager owns the project.
-
             const projectResult =
                 await db.query(
                     `
@@ -2146,8 +2134,6 @@ const deleteAllProjectTasks =
                         "You do not have permission to delete tasks from this project.",
                 });
             }
-
-            // Soft delete all active tasks.
 
             const result =
                 await db.query(
@@ -2186,7 +2172,7 @@ const deleteAllProjectTasks =
         }
     };
 
-    // ============================================================
+// ============================================================
 // PERMANENTLY DELETE ALL TRASHED PROJECT TASKS
 // ============================================================
 
@@ -2286,4 +2272,3 @@ module.exports = {
     deleteAllPermanentProjectTasks,
     sendTaskAssignmentEmail,
 };
-

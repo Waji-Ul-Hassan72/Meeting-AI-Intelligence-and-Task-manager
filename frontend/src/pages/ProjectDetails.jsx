@@ -185,6 +185,10 @@ function ProjectDetails() {
       task.created_by_id ||
       task.createdBy ||
       task.created_by ||
+      task.user_id ||
+      task.userId ||
+      task.creator_id ||
+      task.creatorId ||
       (typeof task.creator === "object"
         ? task.creator?.id || task.creator?._id
         : task.creator);
