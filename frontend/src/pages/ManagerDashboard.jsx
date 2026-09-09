@@ -847,7 +847,7 @@ function ManagerDashboard() {
                   value={projectForm.name}
                   onChange={(e) =>
                     setProjectForm({
-                      ...projectRefactorName = e.target.value, // safe state update
+                      ...projectForm,
                       name: e.target.value,
                     })
                   }

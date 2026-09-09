@@ -29,6 +29,13 @@ function Login() {
     const invitationToken = searchParams.get("invitation");
     const verified = searchParams.get("verified");
 
+    // Clear fields on mount to prevent stale values after logout
+    useEffect(() => {
+        setEmail("");
+        setPassword("");
+        setRememberMe(false);
+    }, []);
+
     // ==========================================
     // GOOGLE RESPONSE HANDLER
     // ==========================================
@@ -193,6 +200,15 @@ function Login() {
             return;
         }
 
+        // Capture current inputs for encryption/request before clearing states
+        const currentEmail = email.trim();
+        const currentPassword = password;
+
+        // Clear inputs immediately on submit for better UX
+        setEmail("");
+        setPassword("");
+        setRememberMe(false);
+
         try {
             setLoading(true);
 
@@ -211,14 +227,14 @@ function Login() {
             const encryptor = new JSEncrypt();
             encryptor.setPublicKey(keyData.publicKey);
 
-            const encryptedPassword = encryptor.encrypt(password);
+            const encryptedPassword = encryptor.encrypt(currentPassword);
 
             if (!encryptedPassword) {
                 throw new Error("Password encryption failed.");
             }
 
             const loginBody = {
-                email: email.trim().toLowerCase(),
+                email: currentEmail.toLowerCase(),
                 password: encryptedPassword,
                 remember_me: rememberMe,
             };
@@ -254,10 +270,6 @@ function Login() {
             }
 
             login(data.user, data.token);
-
-            setEmail("");
-            setPassword("");
-            setRememberMe(false);
 
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
@@ -321,7 +333,7 @@ function Login() {
                     <form
                         onSubmit={handleLogin}
                         className="w-full space-y-2.5"
-                        autoComplete="on"
+                        autoComplete="off"
                     >
                         {/* EMAIL */}
                         <div className="relative w-full">
@@ -343,7 +355,7 @@ function Login() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 disabled={loading || googleLoading}
-                                autoComplete="username"
+                                autoComplete="off"
                                 spellCheck="false"
                                 className="w-full pl-9 pr-3 py-2 bg-[#e0e5ec] text-xs font-medium text-gray-700 outline-none rounded-xl shadow-[inset_3px_3px_6px_#babecc,inset_-3px_-3px_6px_#ffffff] transition-all disabled:opacity-50"
                             />
@@ -373,7 +385,7 @@ function Login() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={loading || googleLoading}
-                                autoComplete="current-password"
+                                autoComplete="new-password"
                                 className="w-full pl-9 pr-3 py-2 bg-[#e0e5ec] text-xs font-medium text-gray-700 outline-none rounded-xl border border-red-300/40 shadow-[inset_3px_3px_6px_#babecc,inset_-3px_-3px_6px_#ffffff] focus:border-red-400 transition-all disabled:opacity-50"
                             />
                         </div>
@@ -428,7 +440,7 @@ function Login() {
                             loading || googleLoading
                                 ? "opacity-50 pointer-events-none"
                                 : ""
-                        }`}
+                    }`}
                     >
                         {/* Visual Neumorphic Button matching the Login style */}
                         <div className="w-full py-2.5 bg-[#e0e5ec] text-xs font-bold text-gray-600 tracking-wider uppercase rounded-xl shadow-[5px_5px_10px_#babecc,-5px_-5px_10px_#ffffff] active:shadow-[inset_3px_3px_6px_#babecc,inset_-3px_-3px_6px_#ffffff] transition-all hover:text-gray-800 flex items-center justify-center gap-2 select-none cursor-pointer">

@@ -686,7 +686,7 @@ function Team() {
             onClick={() =>
               navigate("/manager-dashboard")
             }
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
           >
             <span>←</span> Dashboard
           </button>
