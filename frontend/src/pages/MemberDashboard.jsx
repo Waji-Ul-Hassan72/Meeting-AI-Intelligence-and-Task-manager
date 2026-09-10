@@ -187,7 +187,7 @@ function MemberDashboard() {
     return (
       <div className="min-h-screen bg-[#f7f9fb] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-9 h-9 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-9 h-9 border-2 border-slate-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-3" />
 
           <p className="text-sm font-semibold text-slate-500">
             Loading your workspace...
@@ -214,7 +214,7 @@ function MemberDashboard() {
 
         <div className="flex items-center gap-3">
 
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black">
+          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black">
             AI
           </div>
 
@@ -235,7 +235,7 @@ function MemberDashboard() {
         <nav className="hidden md:flex items-center gap-1">
 
           <button
-            className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold"
+            className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 text-xs font-bold"
           >
             Dashboard
           </button>
@@ -265,7 +265,7 @@ function MemberDashboard() {
 
           </div>
 
-          <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-black">
+          <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-black">
             {userName
               .charAt(0)
               .toUpperCase()}
@@ -292,7 +292,7 @@ function MemberDashboard() {
 
         <div className="mb-8">
 
-          <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-purple-600 mb-1">
             Team Member Dashboard
           </p>
 
@@ -347,7 +347,7 @@ function MemberDashboard() {
                 Assigned Projects
               </span>
 
-              <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <span className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
                 ◈
               </span>
 
@@ -429,7 +429,7 @@ function MemberDashboard() {
 
             <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-12 text-center">
 
-              <div className="w-12 h-12 mx-auto rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl mb-4">
+              <div className="w-12 h-12 mx-auto rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl mb-4">
                 ◈
               </div>
 
@@ -471,14 +471,14 @@ function MemberDashboard() {
 
                   <div
                     key={project.id}
-                    className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-lg hover:shadow-slate-200/50 transition-all"
+                    className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-purple-300 hover:shadow-lg hover:shadow-slate-200/50 transition-all"
                   >
 
                     {/* PROJECT HEADER */}
 
                     <div className="flex items-start justify-between mb-5">
 
-                      <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-extrabold">
+                      <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-extrabold">
                         {projectName
                           .charAt(0)
                           .toUpperCase()}
@@ -510,7 +510,7 @@ function MemberDashboard() {
                       className="text-left w-full"
                     >
 
-                      <h4 className="text-sm font-extrabold text-slate-900 hover:text-blue-700 transition">
+                      <h4 className="text-sm font-extrabold text-slate-900 hover:text-purple-700 transition">
                         {projectName}
                       </h4>
 
@@ -531,7 +531,7 @@ function MemberDashboard() {
                             project.id
                           )
                         }
-                        className="flex-1 px-3 py-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold hover:bg-slate-800 transition"
+                        className="flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-[10px] font-bold hover:bg-purple-700 transition"
                       >
                         Open Project
                       </button>

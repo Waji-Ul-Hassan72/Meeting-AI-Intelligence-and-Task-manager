@@ -16,7 +16,6 @@ function Login() {
     // ==========================================
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [rememberMe, setRememberMe] = useState(false);
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
@@ -33,7 +32,6 @@ function Login() {
     useEffect(() => {
         setEmail("");
         setPassword("");
-        setRememberMe(false);
     }, []);
 
     // ==========================================
@@ -207,7 +205,6 @@ function Login() {
         // Clear inputs immediately on submit for better UX
         setEmail("");
         setPassword("");
-        setRememberMe(false);
 
         try {
             setLoading(true);
@@ -236,7 +233,6 @@ function Login() {
             const loginBody = {
                 email: currentEmail.toLowerCase(),
                 password: encryptedPassword,
-                remember_me: rememberMe,
             };
 
             if (invitationToken) {
@@ -390,29 +386,6 @@ function Login() {
                             />
                         </div>
 
-                        {/* REMEMBER ME */}
-                        <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5 px-0.5">
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) =>
-                                        setRememberMe(e.target.checked)
-                                    }
-                                    disabled={loading || googleLoading}
-                                    className="w-3 h-3 rounded bg-[#e0e5ec] accent-gray-700"
-                                />
-                                Remember me
-                            </label>
-
-                            <Link
-                                to="/forgot-password"
-                                className="hover:text-gray-700 transition-colors"
-                            >
-                                Forgot password?
-                            </Link>
-                        </div>
-
                         {/* LOGIN BUTTON */}
                         <button
                             type="submit"
@@ -440,7 +413,7 @@ function Login() {
                             loading || googleLoading
                                 ? "opacity-50 pointer-events-none"
                                 : ""
-                    }`}
+                        }`}
                     >
                         {/* Visual Neumorphic Button matching the Login style */}
                         <div className="w-full py-2.5 bg-[#e0e5ec] text-xs font-bold text-gray-600 tracking-wider uppercase rounded-xl shadow-[5px_5px_10px_#babecc,-5px_-5px_10px_#ffffff] active:shadow-[inset_3px_3px_6px_#babecc,inset_-3px_-3px_6px_#ffffff] transition-all hover:text-gray-800 flex items-center justify-center gap-2 select-none cursor-pointer">

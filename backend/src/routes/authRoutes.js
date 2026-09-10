@@ -1,4 +1,5 @@
 const express = require("express");
+
 const router = express.Router();
 
 const {
@@ -10,16 +11,23 @@ const {
 } = require("../controllers/authController");
 
 // ============================================================
-// NORMAL AUTHENTICATION
+// PUBLIC KEY
 // ============================================================
 
 router.get("/public-key", getPublicKey);
+
+// ============================================================
+// NORMAL AUTHENTICATION
+// ============================================================
+
 router.post("/signup", signup);
+
 router.post("/login", login);
+
 router.get("/verify-email", verifyEmail);
 
 // ============================================================
-// GOOGLE LOGIN
+// GOOGLE AUTHENTICATION
 // ============================================================
 
 router.post("/google", googleLogin);

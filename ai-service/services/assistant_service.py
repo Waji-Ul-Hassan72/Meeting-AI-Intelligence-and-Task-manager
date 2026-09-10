@@ -546,7 +546,7 @@ def normalize_team(team):
     return []
 
 
-# Enrich tasks with assigned member information
+# Enrich tasks with assigned member information user id=17 but ai does not kno memeber 17
 def enrich_task_assignments(
     project_information
 ):
