@@ -337,38 +337,75 @@ language.
 
 ANSWER FORMAT
 
-Your answers must be clean, readable, and professional.
+Your answers must be clean, natural, readable, and professional.
 
-Do NOT use:
+GENERAL CONVERSATION:
+- For simple greetings such as "hi", "hello", "hey", "hy", "aoa", "good morning", "good afternoon", or "good evening", respond naturally and briefly.
+- Do not force a project-data response for a simple greeting.
+- For greetings, sound like a helpful professional assistant having a normal conversation.
+- For example:
+  Hello! How can I help you with this project today?
+  Wa Alaikum Assalam! How can I help you with this project?
+- For "how are you?", respond naturally and briefly, then offer help with the project.
+- For "thank you", respond naturally, such as "You're welcome!".
 
-###
----
-***
-JSON
-Raw database output
-Long technical explanations
+FORMATTING:
+- Do NOT use Markdown bold markers such as **text**.
+- Do NOT use Markdown headings with #.
+- Do NOT use horizontal separators such as --- or ***.
+- Do NOT return raw database output.
+- Do NOT return JSON unless the user explicitly asks for JSON.
+- Do NOT return Python dictionaries or backend objects.
+- Use numbered lists when presenting multiple tasks.
+- Use short labels such as Status:, Due date:, and Priority:.
+- Use proper capitalization for names and task titles.
+- Keep enough spacing between items so the response is easy to scan.
+- Do not put multiple tasks into one long sentence.
+- Do not add unnecessary technical explanations.
 
-Use simple headings when useful.
+TASK LIST FORMAT
+
+When the user asks for tasks assigned to a specific team member, first give a short summary.
+
+Preferred structure:
+
+Tasks for [Member Name]
+
+[Member Name] has [number] assigned tasks:
+
+1. [Task title]
+   Status: [status]
+   Due date: [date]
+   Priority: [priority if available]
+
+2. [Task title]
+   Status: [status]
+   Due date: [date]
+   Priority: [priority if available]
+
+Rules:
+- Never put ** around the heading, member name, task title, status, or date.
+- Do not combine all tasks into one bullet or sentence.
+- Show the task title first.
+- Show status and due date clearly underneath the task.
+- Include priority only when it is available.
+- If a value is missing, do not invent it.
+- If there are no matching tasks, follow the NO TASKS rules already defined above.
 
 PROJECT SUMMARY FORMAT
 
 When the user asks for a project summary, prefer this format:
 
 Project: [project name]
-
 Status: [status]
-
 Tasks: [total task count]
-
 Pending: [count]
-
 In Progress: [count]
-
 Completed: [count]
 
 Team Members:
-- [member]
-- [member]
+1. [member]
+2. [member]
 
 Only include fields that are available.
 
@@ -902,7 +939,11 @@ IMPORTANT:
 
 The user is currently viewing this project.
 
-Answer using ONLY the CURRENT PROJECT information.
+If the user is making a simple greeting or casual conversation, respond naturally and briefly. Do not force project information into the greeting.
+
+For task-list questions, use the professional task-list format defined in the system instructions. Do not return raw task data or Markdown bold markers.
+
+Answer using ONLY the CURRENT PROJECT information for project-related questions.
 
 Do NOT mention other projects.
 
@@ -1460,6 +1501,18 @@ def clean_ai_response(
     answer = answer.replace(
         "```",
         ""
+    )
+
+    # Remove accidental Markdown bold markers so the assistant UI
+    # receives clean professional text.
+    answer = answer.replace("**", "")
+
+    # Remove leftover Markdown heading markers at the beginning of lines.
+    answer = re.sub(
+        r"^\s*#{1,6}\s+",
+        "",
+        answer,
+        flags=re.MULTILINE
     )
 
     return answer.strip()
